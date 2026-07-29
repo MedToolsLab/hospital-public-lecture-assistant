@@ -29,27 +29,27 @@
         <div class="form-grid">
           <label>
             病院名
-            <input id="hospitalName" type="text" value="医療法人財団明理会　明理会東京大和病院">
+            <input id="hospitalName" type="text" value="〇〇病院">
           </label>
           <label>
             部署名
-            <input id="departmentName" type="text" value="地域医療連携室　広報企画担当">
+            <input id="departmentName" type="text" value="地域連携室 広報担当">
           </label>
           <label>
             問い合わせ電話番号
-            <input id="phoneNumber" type="tel" value="03-5943-2411">
+            <input id="phoneNumber" type="tel" value="00-0000-0000">
           </label>
           <label>
             公開講座ホームページURL
-            <input id="eventUrl" type="url" value="https://tokyoyamato-hp.com/event/">
+            <input id="eventUrl" type="url" value="https://example.com/event/">
           </label>
           <label class="wide">
             署名用住所
-            <input id="signatureAddress" type="text" value="〒173-0001 東京都板橋区本町36-3">
+            <input id="signatureAddress" type="text" value="〒000-0000 東京都〇〇区〇〇0-0-0">
           </label>
           <label class="wide">
             送信者名
-            <input id="senderName" type="text" value="明理会東京大和病院 広報企画担当">
+            <input id="senderName" type="text" value="〇〇病院 広報担当">
           </label>
         </div>
 
@@ -61,17 +61,89 @@
       </div>
     </section>
 
+    <section class="card speaker-master-card">
+      <div class="section-heading">
+        <h2>講師マスター管理</h2>
+        <p>診療科・職種と講師名を登録すると、このブラウザ内に保存され、講座情報入力時の候補として表示されます。</p>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          診療科・職種
+          <input id="speakerMasterDepartment" type="text" list="departmentOptionsList" placeholder="例：内科">
+        </label>
+        <label>
+          講師名
+          <input id="speakerMasterName" type="text" placeholder="例：山田 太郎 医師">
+        </label>
+      </div>
+
+      <div class="master-actions">
+        <button type="button" id="addSpeakerButton" class="primary-button">講師を追加</button>
+        <button type="button" id="deleteSpeakerButton" class="secondary-button">選択した講師を削除</button>
+        <button type="button" id="resetSpeakerMasterButton" class="secondary-button">講師マスターを初期化</button>
+        <span id="speakerMasterStatus" class="status-message" aria-live="polite"></span>
+      </div>
+
+      <label class="wide speaker-master-list-label">
+        登録済み講師
+        <select id="speakerMasterList" class="speaker-master-list" size="8"></select>
+      </label>
+    </section>
+
+    <section class="card venue-master-card">
+      <div class="section-heading">
+        <h2>会場テンプレート管理</h2>
+        <p>よく使う会場を登録すると、このブラウザ内に保存され、講座情報へ自動入力できます。</p>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          テンプレート名
+          <input id="venueTemplateName" type="text" placeholder="例：市民ホール 会議室">
+        </label>
+        <label>
+          会場名
+          <input id="venueTemplateVenueName" type="text" placeholder="例：〇〇市民ホール">
+        </label>
+        <label>
+          会場補足
+          <input id="venueTemplateVenueNote" type="text" placeholder="例：1階会議室">
+        </label>
+        <label>
+          郵便番号
+          <input id="venueTemplatePostalCode" type="text" placeholder="例：〒000-0000">
+        </label>
+        <label class="wide">
+          住所
+          <input id="venueTemplateAddress" type="text" placeholder="例：東京都〇〇区〇〇0-0-0">
+        </label>
+        <label class="wide">
+          アクセス
+          <textarea id="venueTemplateAccess" rows="3" placeholder="例：〇〇駅から徒歩約5分"></textarea>
+        </label>
+      </div>
+
+      <div class="master-actions">
+        <button type="button" id="addVenueTemplateButton" class="primary-button">会場を追加</button>
+        <button type="button" id="deleteVenueTemplateButton" class="secondary-button">選択した会場を削除</button>
+        <button type="button" id="resetVenueTemplatesButton" class="secondary-button">会場テンプレートを初期化</button>
+        <span id="venueTemplateStatus" class="status-message" aria-live="polite"></span>
+      </div>
+
+      <label class="wide master-list-label">
+        登録済み会場
+        <select id="venueTemplateList" class="master-list" size="8"></select>
+      </label>
+    </section>
+
     <section class="card">
       <div class="section-heading">
         <h2>よく使う会場テンプレート</h2>
         <p>先に会場を選ぶと、会場情報を自動入力できます。</p>
       </div>
 
-      <div class="template-buttons">
-        <button type="button" class="secondary-button" data-template="highlife1">ハイライフプラザいたばし 1階会議室</button>
-        <button type="button" class="secondary-button" data-template="highlife2">ハイライフプラザいたばし 2階Aホール</button>
-        <button type="button" class="secondary-button" data-template="yamato">明理会東京大和病院 K&amp;Eビル1階</button>
-      </div>
+      <div id="venueTemplateButtons" class="template-buttons"></div>
     </section>
 
     <section class="card">
@@ -82,8 +154,12 @@
 
       <div class="form-grid">
         <label class="wide">
+          ホームページ用テーマ
+          <input id="homepageTheme" type="text" placeholder="例：健康づくり">
+        </label>
+        <label class="wide">
           講演名
-          <input id="lectureTitle" type="text" placeholder="例：前立腺がんの最新治療について">
+          <input id="lectureTitle" type="text" placeholder="例：今日から始める健康習慣">
         </label>
         <label class="wide">
           講演内容
@@ -100,9 +176,18 @@
         <label>
           開催時間
           <select id="timeRange">
+            <option value="9:00～10:00">9:00～10:00</option>
+            <option value="9:30～10:30">9:30～10:30</option>
             <option value="10:00～11:00">10:00～11:00</option>
+            <option value="10:30～11:30">10:30～11:30</option>
+            <option value="11:00～12:00">11:00～12:00</option>
+            <option value="13:00～14:00">13:00～14:00</option>
+            <option value="13:30～14:30">13:30～14:30</option>
             <option value="14:00～15:00" selected>14:00～15:00</option>
+            <option value="14:30～15:30">14:30～15:30</option>
             <option value="15:00～16:00">15:00～16:00</option>
+            <option value="15:30～16:30">15:30～16:30</option>
+            <option value="16:00～17:00">16:00～17:00</option>
             <option value="その他">その他</option>
           </select>
         </label>
@@ -121,7 +206,8 @@
         </label>
         <label class="wide">
           講師名
-          <input id="speakerName" type="text" placeholder="例：髙　和英 医師">
+          <input id="speakerName" type="text" list="speakerOptionsList" placeholder="例：山田 太郎 医師">
+          <datalist id="speakerOptionsList"></datalist>
         </label>
         <label>
           会場名
@@ -133,7 +219,7 @@
         </label>
         <label>
           郵便番号
-          <input id="postalCode" type="text" placeholder="例：〒173-0004">
+          <input id="postalCode" type="text" placeholder="例：〒000-0000">
         </label>
         <label class="wide">
           住所

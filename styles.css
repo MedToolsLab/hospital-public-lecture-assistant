@@ -345,3 +345,28 @@ pre {
     justify-content: space-between;
   }
 }
+
+
+.master-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0;
+}
+
+.speaker-master-list-label,
+.master-list-label {
+  margin-top: 8px;
+}
+
+.speaker-master-list,
+.master-list {
+  min-height: 180px;
+}
+
+@media (max-width: 720px) {
+  .master-actions {
+    display: grid;
+  }
+}

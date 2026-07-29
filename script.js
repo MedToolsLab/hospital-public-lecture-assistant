@@ -22,6 +22,18 @@ const departmentOptions = [
   "入退院支援室"
 ];
 
+const SPEAKER_MASTER_STORAGE_KEY = "publicLectureSpeakerMaster";
+const VENUE_TEMPLATES_STORAGE_KEY = "publicLectureVenueTemplates";
+
+const defaultSpeakerMaster = {
+  "内科": ["山田 太郎 医師"],
+  "外科": ["佐藤 花子 医師"],
+  "リハビリテーション科": ["理学療法士 鈴木 一郎"],
+  "医療ソーシャルワーカー": ["田中 美咲"]
+};
+
+let speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
+
 const speakerTitleKeywords = [
   "診療放射線技師",
   "臨床検査技師",
@@ -55,6 +67,7 @@ const BASIC_FIELDS = [
 ];
 
 const EVENT_FIELDS = [
+  "homepageTheme",
   "lectureTitle",
   "lectureDescription",
   "eventDate",
@@ -88,40 +101,39 @@ const OUTPUT_DEFINITIONS = [
   ["reminderPreview", "リマインダーメール本文プレビュー"],
   ["formDescription", "Googleフォーム説明文"],
   ["formConfirmation", "Googleフォーム送信完了画面文"],
-  ["homepageNotice", "ホームページ掲載用の注意文"]
+  ["homepageNotice", "ホームページ掲載用の注意文"],
+  ["homepageListing", "ホームページ掲載文"]
 ];
 
-const venueTemplates = {
-  highlife1: {
-    venueName: "ハイライフプラザいたばし",
+const defaultVenueTemplates = {
+  sampleHall: {
+    templateName: "市民ホール 会議室",
+    venueName: "〇〇市民ホール",
     venueNote: "1階会議室",
-    postalCode: "〒173-0004",
-    address: "東京都板橋区板橋1丁目55-16",
-    access: "都営三田線「新板橋駅」から約4分、JR「板橋駅」から約3分"
+    postalCode: "〒000-0000",
+    address: "東京都〇〇区〇〇0-0-0",
+    access: "〇〇駅から徒歩約5分"
   },
-  highlife2: {
-    venueName: "ハイライフプラザいたばし",
-    venueNote: "2階Aホール",
-    postalCode: "〒173-0004",
-    address: "東京都板橋区板橋1丁目55-16",
-    access: "都営三田線「新板橋駅」から約4分、JR「板橋駅」から約3分"
-  },
-  yamato: {
-    venueName: "明理会東京大和病院",
-    venueNote: "K&Eビル1階",
-    postalCode: "〒173-0001",
-    address: "東京都板橋区本町36-3",
-    access: "都営三田線「板橋本町駅」下車 A2出口より徒歩約3分"
+  sampleHospital: {
+    templateName: "院内会議室",
+    venueName: "〇〇病院",
+    venueNote: "1階会議室",
+    postalCode: "〒000-0000",
+    address: "東京都〇〇区〇〇0-0-0",
+    access: "〇〇駅から徒歩約3分"
   }
 };
 
+let venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
+
 const DEFAULT_VALUES = {
-  hospitalName: "医療法人財団明理会　明理会東京大和病院",
-  departmentName: "地域医療連携室　広報企画担当",
-  phoneNumber: "03-5943-2411",
-  eventUrl: "https://tokyoyamato-hp.com/event/",
-  signatureAddress: "〒173-0001 東京都板橋区本町36-3",
-  senderName: "明理会東京大和病院 広報企画担当",
+  hospitalName: "〇〇病院",
+  departmentName: "地域連携室 広報担当",
+  phoneNumber: "00-0000-0000",
+  eventUrl: "https://example.com/event/",
+  signatureAddress: "〒000-0000 東京都〇〇区〇〇0-0-0",
+  senderName: "〇〇病院 広報担当",
+  homepageTheme: "",
   openingNote: "開場30分前",
   notes: "受講の際は、マスク着用をお願いいたします。"
 };
@@ -132,6 +144,11 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeDateAutoWeekday();
   initializeTimeRangeSelector();
   initializeDepartmentDatalist();
+  loadSpeakerMaster();
+  loadVenueTemplates();
+  initializeSpeakerMasterManager();
+  initializeVenueTemplateManager();
+  initializeSpeakerDatalist();
 
   document.getElementById("generateButton").addEventListener("click", handleGenerate);
   document.getElementById("clearButton").addEventListener("click", clearEventFields);
@@ -227,6 +244,257 @@ function initializeDepartmentDatalist() {
   });
 }
 
+function cloneVenueTemplates(templates) {
+  return Object.fromEntries(Object.entries(templates || {}).map(([key, template]) => [key, { ...template }]));
+}
+
+function loadVenueTemplates() {
+  try {
+    const saved = localStorage.getItem(VENUE_TEMPLATES_STORAGE_KEY);
+    venueTemplates = saved ? normalizeVenueTemplates(JSON.parse(saved)) : cloneVenueTemplates(defaultVenueTemplates);
+  } catch (error) {
+    console.error("loadVenueTemplates error", error);
+    venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
+  }
+}
+
+function saveVenueTemplates() {
+  localStorage.setItem(VENUE_TEMPLATES_STORAGE_KEY, JSON.stringify(venueTemplates));
+}
+
+function normalizeVenueTemplates(templates) {
+  const normalized = {};
+  Object.entries(templates || {}).forEach(([key, template]) => {
+    if (!template || typeof template !== "object") return;
+    const cleanTemplate = {
+      templateName: String(template.templateName || template.venueName || "").trim(),
+      venueName: String(template.venueName || "").trim(),
+      venueNote: String(template.venueNote || "").trim(),
+      postalCode: String(template.postalCode || "").trim(),
+      address: String(template.address || "").trim(),
+      access: String(template.access || "").trim()
+    };
+    if (cleanTemplate.templateName && cleanTemplate.venueName) normalized[key] = cleanTemplate;
+  });
+  return Object.keys(normalized).length ? normalized : cloneVenueTemplates(defaultVenueTemplates);
+}
+
+function initializeVenueTemplateManager() {
+  document.getElementById("addVenueTemplateButton").addEventListener("click", addVenueTemplate);
+  document.getElementById("deleteVenueTemplateButton").addEventListener("click", deleteSelectedVenueTemplate);
+  document.getElementById("resetVenueTemplatesButton").addEventListener("click", resetVenueTemplates);
+  renderVenueTemplateList();
+}
+
+function addVenueTemplate() {
+  const template = {
+    templateName: getInputValue("venueTemplateName"),
+    venueName: getInputValue("venueTemplateVenueName"),
+    venueNote: getInputValue("venueTemplateVenueNote"),
+    postalCode: getInputValue("venueTemplatePostalCode"),
+    address: getInputValue("venueTemplateAddress"),
+    access: getInputValue("venueTemplateAccess")
+  };
+
+  if (!template.templateName || !template.venueName) {
+    showVenueTemplateStatus("テンプレート名と会場名を入力してください。");
+    return;
+  }
+
+  const key = createVenueTemplateKey();
+  venueTemplates[key] = template;
+  saveVenueTemplates();
+  renderVenueTemplateList();
+  renderVenueTemplateButtons();
+  clearVenueTemplateForm();
+  showVenueTemplateStatus("会場を追加しました。");
+}
+
+function deleteSelectedVenueTemplate() {
+  const selectedKey = document.getElementById("venueTemplateList").value;
+  if (!selectedKey) {
+    showVenueTemplateStatus("削除する会場を選択してください。");
+    return;
+  }
+
+  delete venueTemplates[selectedKey];
+  saveVenueTemplates();
+  renderVenueTemplateList();
+  renderVenueTemplateButtons();
+  showVenueTemplateStatus("選択した会場を削除しました。");
+}
+
+function resetVenueTemplates() {
+  venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
+  saveVenueTemplates();
+  renderVenueTemplateList();
+  renderVenueTemplateButtons();
+  clearVenueTemplateForm();
+  showVenueTemplateStatus("会場テンプレートを初期化しました。");
+}
+
+function renderVenueTemplateList() {
+  const list = document.getElementById("venueTemplateList");
+  list.innerHTML = "";
+  Object.entries(venueTemplates).forEach(([key, template]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = template.templateName + " / " + template.venueName + (template.venueNote ? "（" + template.venueNote + "）" : "");
+    list.append(option);
+  });
+}
+
+function renderVenueTemplateButtons() {
+  const container = document.getElementById("venueTemplateButtons");
+  container.innerHTML = "";
+  Object.entries(venueTemplates).forEach(([key, template]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-button";
+    button.dataset.template = key;
+    button.textContent = template.templateName;
+    button.addEventListener("click", () => applyVenueTemplate(key));
+    container.append(button);
+  });
+}
+
+function clearVenueTemplateForm() {
+  ["venueTemplateName", "venueTemplateVenueName", "venueTemplateVenueNote", "venueTemplatePostalCode", "venueTemplateAddress", "venueTemplateAccess"].forEach((id) => setInputValue(id, ""));
+}
+
+function showVenueTemplateStatus(message) {
+  const status = document.getElementById("venueTemplateStatus");
+  status.textContent = message;
+  window.setTimeout(() => { status.textContent = ""; }, 2400);
+}
+
+function createVenueTemplateKey() {
+  const base = "venue" + Date.now().toString(36);
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return base + suffix;
+}
+
+function cloneSpeakerMaster(master) {
+  return Object.fromEntries(Object.entries(master || {}).map(([department, speakers]) => [department, [...speakers]]));
+}
+
+function loadSpeakerMaster() {
+  try {
+    const saved = localStorage.getItem(SPEAKER_MASTER_STORAGE_KEY);
+    speakerMaster = saved ? normalizeSpeakerMaster(JSON.parse(saved)) : cloneSpeakerMaster(defaultSpeakerMaster);
+  } catch (error) {
+    console.error("loadSpeakerMaster error", error);
+    speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
+  }
+}
+
+function saveSpeakerMaster() {
+  localStorage.setItem(SPEAKER_MASTER_STORAGE_KEY, JSON.stringify(speakerMaster));
+}
+
+function normalizeSpeakerMaster(master) {
+  const normalized = {};
+  Object.entries(master || {}).forEach(([department, speakers]) => {
+    if (!department || !Array.isArray(speakers)) return;
+    const cleanSpeakers = [...new Set(speakers.map((speaker) => String(speaker || "").trim()).filter(Boolean))];
+    if (cleanSpeakers.length) normalized[department] = cleanSpeakers;
+  });
+  return Object.keys(normalized).length ? normalized : cloneSpeakerMaster(defaultSpeakerMaster);
+}
+
+function initializeSpeakerMasterManager() {
+  document.getElementById("addSpeakerButton").addEventListener("click", addSpeakerToMaster);
+  document.getElementById("deleteSpeakerButton").addEventListener("click", deleteSelectedSpeakerFromMaster);
+  document.getElementById("resetSpeakerMasterButton").addEventListener("click", resetSpeakerMaster);
+  renderSpeakerMasterList();
+}
+
+function addSpeakerToMaster() {
+  const department = getInputValue("speakerMasterDepartment");
+  const speakerName = normalizeSpeakerName(getInputValue("speakerMasterName"));
+  if (!department || !speakerName) {
+    showSpeakerMasterStatus("診療科・職種と講師名を入力してください。");
+    return;
+  }
+  if (!speakerMaster[department]) speakerMaster[department] = [];
+  if (!speakerMaster[department].includes(speakerName)) speakerMaster[department].push(speakerName);
+  saveSpeakerMaster();
+  renderSpeakerMasterList();
+  updateSpeakerOptions();
+  setInputValue("speakerMasterName", "");
+  showSpeakerMasterStatus("講師を追加しました。");
+}
+
+function deleteSelectedSpeakerFromMaster() {
+  const selectedValue = document.getElementById("speakerMasterList").value;
+  if (!selectedValue) {
+    showSpeakerMasterStatus("削除する講師を選択してください。");
+    return;
+  }
+  const selected = JSON.parse(selectedValue);
+  speakerMaster[selected.department] = (speakerMaster[selected.department] || []).filter((speaker) => speaker !== selected.speaker);
+  if (!speakerMaster[selected.department].length) delete speakerMaster[selected.department];
+  saveSpeakerMaster();
+  renderSpeakerMasterList();
+  updateSpeakerOptions();
+  showSpeakerMasterStatus("選択した講師を削除しました。");
+}
+
+function resetSpeakerMaster() {
+  speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
+  saveSpeakerMaster();
+  renderSpeakerMasterList();
+  updateSpeakerOptions();
+  showSpeakerMasterStatus("講師マスターを初期化しました。");
+}
+
+function renderSpeakerMasterList() {
+  const list = document.getElementById("speakerMasterList");
+  list.innerHTML = "";
+  Object.entries(speakerMaster).forEach(([department, speakers]) => {
+    const group = document.createElement("optgroup");
+    group.label = department;
+    speakers.forEach((speaker) => {
+      const option = document.createElement("option");
+      option.value = JSON.stringify({ department, speaker });
+      option.textContent = "・" + speaker;
+      group.append(option);
+    });
+    list.append(group);
+  });
+}
+
+function showSpeakerMasterStatus(message) {
+  const status = document.getElementById("speakerMasterStatus");
+  status.textContent = message;
+  window.setTimeout(() => { status.textContent = ""; }, 2400);
+}
+
+function initializeSpeakerDatalist() {
+  const departmentInput = document.getElementById("speakerDepartment");
+  departmentInput.addEventListener("input", updateSpeakerOptions);
+  departmentInput.addEventListener("change", updateSpeakerOptions);
+  updateSpeakerOptions();
+}
+
+function updateSpeakerOptions() {
+  const speakerList = document.getElementById("speakerOptionsList");
+  const department = getInputValue("speakerDepartment");
+  const speakers = department && speakerMaster[department]
+    ? speakerMaster[department]
+    : getAllSpeakerOptions();
+
+  speakerList.innerHTML = "";
+  speakers.forEach((speaker) => {
+    const option = document.createElement("option");
+    option.value = speaker;
+    speakerList.append(option);
+  });
+}
+
+function getAllSpeakerOptions() {
+  return [...new Set(Object.values(speakerMaster).flat())];
+}
 function saveBasicSettings() {
   try {
     localStorage.setItem(BASIC_SETTINGS_STORAGE_KEY, JSON.stringify(collectBasicSettings()));
@@ -274,13 +542,7 @@ function showBasicSettingsStatus(message) {
 }
 
 function initializeVenueTemplateButtons() {
-  // data-template属性を持つ会場ボタンに、自動入力処理をまとめて設定します。
-  document.querySelectorAll('[data-template]').forEach((button) => {
-    button.addEventListener("click", (event) => {
-      const templateKey = event.currentTarget.getAttribute("data-template");
-      applyVenueTemplate(templateKey);
-    });
-  });
+  renderVenueTemplateButtons();
 }
 
 function applyVenueTemplate(templateKey) {
@@ -298,28 +560,35 @@ function clearEventFields() {
   updateCustomTimeRangeVisibility();
   setInputValue("openingNote", DEFAULT_VALUES.openingNote);
   setInputValue("speakerDepartment", "泌尿器科");
+  updateSpeakerOptions();
   setInputValue("notes", DEFAULT_VALUES.notes);
   renderEmptyMessage();
 }
 
 function fillSample() {
   const sample = {
-    lectureTitle: "知っておきたい前立腺がんの基礎知識",
-    lectureDescription: "前立腺がんの検査、治療、日常生活で気をつけたいことについて、専門医がわかりやすく解説します。",
-    eventDate: "2026-09-12",
-    dayOfWeek: "土",
+    homepageTheme: "健康づくり",
+    lectureTitle: "今日から始める健康習慣",
+    lectureDescription: "日常生活で取り入れられる健康管理のポイントについて、わかりやすくご紹介します。",
+    eventDate: "2026-09-15",
+    dayOfWeek: "火",
     timeRange: "14:00～15:00",
     customTimeRange: "",
     openingNote: DEFAULT_VALUES.openingNote,
-    speakerDepartment: "脳神経外科",
-    speakerName: "谷地　一成 医師",
+    speakerDepartment: "内科",
+    speakerName: "山田 太郎 医師",
+    venueName: "〇〇市民ホール",
+    venueNote: "1階会議室",
+    postalCode: "〒000-0000",
+    address: "東京都〇〇区〇〇0-0-0",
+    access: "〇〇駅から徒歩約5分",
     capacity: "30名",
     notes: DEFAULT_VALUES.notes
   };
 
   Object.entries(sample).forEach(([id, value]) => setInputValue(id, value));
   updateCustomTimeRangeVisibility();
-  applyVenueTemplate("highlife1");
+  updateSpeakerOptions();
 }
 
 function handleGenerate() {
@@ -369,9 +638,12 @@ function buildOutputs(data) {
     reminderScript: buildReminderScript(data),
     autoReplyPreview: buildAutoReplyBody(data, "申込者"),
     reminderPreview: buildReminderBody(data, "申込者", 3),
+    formTitle: buildFormTitle(data),
     formDescription: buildFormDescription(data),
+    formApplicationGuide: buildFormApplicationGuide(data),
     formConfirmation: buildFormConfirmation(data),
-    homepageNotice: buildHomepageNotice(data)
+    homepageNotice: buildHomepageNotice(data),
+    homepageListing: buildHomepageListing(data)
   };
 }
 
@@ -406,12 +678,14 @@ function buildSignature(data) {
 }
 
 function buildAutoReplyBody(data, nameExpression) {
+  const senderLine = [data.hospitalName, data.departmentName].filter(Boolean).join("　");
+
   return `${nameExpression} 様
 
 お世話になっております。
-明理会東京大和病院　広報企画担当です。
+${senderLine}です。
 
-この度は、明理会東京大和病院の無料公開講座にお申込みいただき、誠にありがとうございます。
+この度は、${data.hospitalName}の無料公開講座にお申込みいただき、誠にありがとうございます。
 
 ${buildLectureInfo(data)}
 
@@ -427,11 +701,12 @@ function buildReminderBody(data, nameExpression, daysLeftExpression) {
   const openingLine = daysLeftExpression === 3
     ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
     : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
+  const senderLine = [data.hospitalName, data.departmentName].filter(Boolean).join("　");
 
   return `${nameExpression} 様
 
 お世話になっております。
-明理会東京大和病院　広報企画担当です。
+${senderLine}です。
 
 ${openingLine}
 当日の内容を改めてご案内いたしますので、ご確認いただけますと幸いです。
@@ -488,15 +763,110 @@ function buildGoogleFormCompletionMessage(data) {
 }
 
 function getContactHospitalName(hospitalName) {
-  return String(hospitalName || "")
-    .replace(/^医療法人財団明理会[　\s]*/, "")
-    .trim();
+  return String(hospitalName || "").trim();
 }
 
 function buildHomepageNotice(data) {
   return `※お申し込み後、数分以内に受付完了メール（自動返信）をお送りしております。メールが届かない場合は、迷惑メールフォルダをご確認ください。届かない場合は3営業日以内に${data.phoneNumber}までお問い合わせください。`;
 }
 
+function buildFormTitle(data) {
+  return data.lectureTitle ? `【無料公開講座】${data.lectureTitle}` : "無料公開講座 お申込みフォーム";
+}
+
+function buildFormApplicationGuide(data) {
+  return [buildFormTitle(data), "", buildLectureInfo(data), "", "お申し込み後、数分以内に受付完了メール（自動返信）をお送りしております。", "メールが届かない場合は、迷惑メールフォルダをご確認ください。"].filter(Boolean).join("\n");
+}
+
+function buildHomepageListing(data) {
+  const month = getEventMonth(data);
+  const theme = data.homepageTheme || data.lectureTitle;
+  const monthText = month ? month + "月" : "";
+  const lectureDescription = formatHomepageLectureDescription(data.lectureDescription);
+  const lines = [
+    "【無料公開講座】" + monthText + "開催のお知らせ",
+    "",
+    (data.hospitalName || DEFAULT_VALUES.hospitalName) + "では、地域の皆さま向けに公開講座を開催しています。",
+    theme ? (monthText || "○月") + "は「" + theme + "」をテーマに、" + buildSpeakerDescription(data) + "。" : "",
+    "参加費無料・事前申込制です。ぜひお気軽にご参加ください。",
+    "",
+    buildHomepageDateTime(data),
+    formatHomepageLectureTitle(data.lectureTitle),
+    buildHomepageSpeakerLine(data),
+    "",
+    lectureDescription,
+    "",
+    buildHomepageVenueBlock(data),
+    "",
+    data.capacity ? "定員：" + data.capacity : "",
+    "",
+    "詳細・お申込み",
+    "公開講座の詳細・お申込みについては、イベントページよりご確認ください。",
+    "",
+    "▶ イベントページはこちら",
+    data.eventUrl
+  ];
+
+  return trimBlankLines(lines).join("\n");
+}
+
+function getEventMonth(data) {
+  if (!data.eventDate) return "";
+  const month = Number(data.eventDate.split("-")[1]);
+  return Number.isFinite(month) ? String(month) : "";
+}
+
+function buildHomepageDateTime(data) {
+  if (!data.eventDate) return "";
+  const [, month, day] = data.eventDate.split("-");
+  const weekdayText = data.dayOfWeek ? "\uFF08" + data.dayOfWeek + "\uFF09" : "";
+  const dateText = Number(month) + "月" + Number(day) + "\u65E5" + weekdayText;
+  const timeText = toFullWidthColon(getSelectedTimeRange(data));
+  const openingText = data.openingNote ? "\uFF08" + data.openingNote + "\uFF09" : "";
+  return [dateText, timeText].filter(Boolean).join(" ") + openingText;
+}
+
+function formatHomepageLectureTitle(title) {
+  return (title || "").replace(/\s*\uFF5E\s*/g, " \uFF5E ").replace(/\s+/g, " ").trim();
+}
+
+function buildHomepageSpeakerLine(data) {
+  const speakerText = [data.speakerDepartment, data.speakerName].filter(Boolean).join("\u3000");
+  return speakerText ? "講師：" + speakerText : "";
+}
+
+function formatHomepageLectureDescription(description) {
+  const trimmed = (description || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.includes("\n")) return trimmed;
+  return trimmed.replace(/\u3002(?=\S)/g, "\u3002\n");
+}
+
+function buildHomepageVenueBlock(data) {
+  const venueText = data.venueNote ? data.venueName + "\uFF08" + data.venueNote + "\uFF09" : data.venueName;
+  const addressText = [data.postalCode, data.address].filter(Boolean).join(" ");
+  return ["会場", venueText, addressText, data.access ? "\uFF08" + data.access + "\uFF09" : ""].filter(Boolean).join("\n");
+}
+
+function buildSpeakerDescription(data) {
+  const department = data.speakerDepartment || "";
+  const speakerName = data.speakerName || "";
+  if (speakerName.includes("医師") && department) return department + "医がわかりやすく解説します";
+  const role = speakerTitleKeywords.find((title) => speakerName.includes(title) || department.includes(title));
+  if (role) return role + "がわかりやすく解説します";
+  return "専門スタッフがわかりやすく解説します";
+}
+
+function toFullWidthColon(text) {
+  return (text || "").replace(/:/g, "\uFF1A");
+}
+
+function trimBlankLines(lines) {
+  const trimmed = lines.map((line) => line || "");
+  while (trimmed.length && trimmed[0] === "") trimmed.shift();
+  while (trimmed.length && trimmed[trimmed.length - 1] === "") trimmed.pop();
+  return trimmed.filter((line, index, array) => line !== "" || (array[index - 1] !== "" && array[index + 1] !== ""));
+}
 function buildAutoReplyScript(data) {
   const settings = createScriptSettings(data);
 
@@ -506,7 +876,7 @@ function buildAutoReplyScript(data) {
  */
 function autoReply(e) {
   const SETTINGS = ${toSafeScriptObject(settings)};
-  const SUBJECT = "【お申込み完了】明理会東京大和病院 無料公開講座";
+  const SUBJECT = "\u3010\u304a\u7533\u8fbc\u307f\u5b8c\u4e86\u3011" + SETTINGS.hospitalName + " \u7121\u6599\u516c\u958b\u8b1b\u5ea7";
 
   try {
     const sheet = e && e.range
@@ -562,14 +932,14 @@ function getOrCreateAutoReplyColumn_(sheet, headerName) {
 }
 
 function buildAutoReplyBody_(settings, name) {
-  return name + " 様\\n\\n"
-    + "お世話になっております。\\n"
-    + "明理会東京大和病院　広報企画担当です。\\n\\n"
-    + "この度は、明理会東京大和病院の無料公開講座にお申込みいただき、誠にありがとうございます。\\n\\n"
-    + buildAutoReplyLectureInfo_(settings) + "\\n\\n"
-    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\\n\\n"
-    + "【公開講座ホームページ】\\n"
-    + settings.eventUrl + "\\n\\n"
+  return name + " 様\n\n"
+    + "お世話になっております。\n"
+    + [settings.hospitalName, settings.departmentName].filter(Boolean).join("　") + "です。\n\n"
+    + "この度は、" + settings.hospitalName + "の無料公開講座にお申込みいただき、誠にありがとうございます。\n\n"
+    + buildAutoReplyLectureInfo_(settings) + "\n\n"
+    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\n\n"
+    + "【公開講座ホームページ】\n"
+    + settings.eventUrl + "\n\n"
     + buildAutoReplySignature_(settings);
 }
 
@@ -715,48 +1085,16 @@ function buildReminderBody_(settings, name, daysLeft) {
     ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
     : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
 
-  return name + " 様\\n\\n"
-    + "お世話になっております。\\n"
-    + "明理会東京大和病院　広報企画担当です。\\n\\n"
-    + openingLine + "\\n"
-    + "当日の内容を改めてご案内いたしますので、ご確認いただけますと幸いです。\\n\\n"
-    + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"
-    + buildReminderLectureInfo_(settings) + "\\n"
-    + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n"
-    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\\n\\n"
-    + "【公開講座ホームページ（最新情報はこちら）】\\n"
-    + settings.eventUrl + "\\n\\n"
+  return name + " 様\n\n"
+    + "お世話になっております。\n"
+    + [settings.hospitalName, settings.departmentName].filter(Boolean).join("　") + "です。\n\n"
+    + openingLine + "\n"
+    + "当日の内容を改めてご案内いたしますので、ご確認いただけますと幸いです。\n\n"
+    + buildReminderLectureInfo_(settings) + "\n\n"
+    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\n\n"
+    + "【公開講座ホームページ（最新情報はこちら）】\n"
+    + settings.eventUrl + "\n\n"
     + buildReminderSignature_(settings);
-}
-
-function buildReminderLectureInfo_(settings) {
-  const dateTime = [settings.eventDateText, settings.timeRange].filter(Boolean).join(" ");
-  const openingText = settings.openingNote ? "（" + settings.openingNote + "）" : "";
-  const speakerText = [settings.speakerDepartment, settings.speakerName].filter(Boolean).join("　");
-  const venueText = settings.venueNote ? settings.venueName + "（" + settings.venueNote + "）" : settings.venueName;
-  const addressText = [settings.postalCode, settings.address].filter(Boolean).join(" ");
-
-  return [
-    "【お申込内容（再送）】",
-    settings.lectureTitle ? "●公開講座：『" + settings.lectureTitle + "』" : "",
-    dateTime || openingText ? "●日時：" + dateTime + openingText : "",
-    speakerText ? "●講師：" + speakerText : "",
-    settings.capacity ? "●定員：" + settings.capacity : "",
-    venueText ? "●場所：" + venueText : "",
-    addressText ? "住所：" + addressText : "",
-    settings.access ? "（" + settings.access + "）" : "",
-    settings.notes ? "備考：" + settings.notes : ""
-  ].filter(Boolean).join("\\n");
-}
-
-function buildReminderSignature_(settings) {
-  return [
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    [settings.hospitalName, settings.departmentName].filter(Boolean).join("　"),
-    settings.signatureAddress,
-    settings.phoneNumber ? "TEL " + settings.phoneNumber : "",
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  ].filter(Boolean).join("\\n");
 }
 
 function logReminderResult_(sentCount, skippedCount, invalidEmailCount) {
