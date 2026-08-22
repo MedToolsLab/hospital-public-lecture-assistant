@@ -3,283 +3,332 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>公開講座運営アシスタント</title>
+  <title>公開講座AIアシスタント</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="site-header">
     <div class="container">
-      <p class="eyebrow">Hospital Public Lecture Tool</p>
-      <h1>公開講座運営アシスタント</h1>
-      <p class="lead">講座情報を入力すると、自動返信メール・リマインダーメール・フォーム案内文を生成できます。</p>
+      <p class="eyebrow">Hospital Public Relations Tool</p>
+      <h1>公開講座AIアシスタント</h1>
+      <p class="lead">講座情報を入力すると、自動返信メールとリマインダーメールのApps Scriptを生成できます。</p>
     </div>
   </header>
 
-  <main class="container app-layout">
-    <section class="card basic-settings-card">
-      <div class="section-heading collapsible-heading">
-        <div>
-          <h2>基本設定</h2>
-          <p>毎回使う病院情報です。ブラウザ内に保存して、次回以降の入力を減らせます。</p>
+  <main class="container layout">
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="settings-trigger" aria-expanded="true" aria-controls="settings-panel" data-accordion="settings">
+        <span>
+          <span class="accordion-title">基本設定</span>
+          <span class="accordion-help">病院名、部署名、問い合わせ先などを保存します。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="settings-panel" role="region" aria-labelledby="settings-trigger">
+        <div class="toolbar">
+          <button type="button" id="exportButton" class="secondary-button">JSONエクスポート</button>
+          <button type="button" id="importButton" class="secondary-button">JSONインポート</button>
+          <button type="button" id="resetSettingsButton" class="danger-button">基本設定を初期値に戻す</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
         </div>
-        <button type="button" id="toggleBasicSettingsButton" class="secondary-button" aria-expanded="false" aria-controls="basicSettingsPanel">基本設定を開く</button>
-      </div>
 
-      <div id="basicSettingsPanel" class="collapsible-panel" hidden>
         <div class="form-grid">
-          <label>
-            病院名
-            <input id="hospitalName" type="text" value="〇〇病院">
-          </label>
-          <label>
-            部署名
-            <input id="departmentName" type="text" value="地域連携室 広報担当">
-          </label>
-          <label>
-            問い合わせ電話番号
-            <input id="phoneNumber" type="tel" value="00-0000-0000">
-          </label>
-          <label>
-            公開講座ホームページURL
-            <input id="eventUrl" type="url" value="https://example.com/event/">
-          </label>
-          <label class="wide">
-            署名用住所
-            <input id="signatureAddress" type="text" value="〒000-0000 東京都〇〇区〇〇0-0-0">
-          </label>
-          <label class="wide">
-            送信者名
-            <input id="senderName" type="text" value="〇〇病院 広報担当">
-          </label>
-        </div>
+          <div class="field">
+            <label for="hospitalName">署名用の病院名 <span class="required-mark">*</span></label>
+            <input type="text" id="hospitalName" required placeholder="例：明理会東京大和病院" autocomplete="organization">
+            <p class="field-error" id="hospitalNameError"></p>
+          </div>
 
-        <div class="basic-actions">
-          <button type="button" id="saveBasicSettingsButton" class="primary-button">基本設定を保存</button>
-          <button type="button" id="resetBasicSettingsButton" class="secondary-button">基本設定を初期値に戻す</button>
-          <span id="basicSettingsStatus" class="status-message" aria-live="polite"></span>
-        </div>
-      </div>
-    </section>
+          <div class="field">
+            <label for="departmentName">署名用の部署名 <span class="required-mark">*</span></label>
+            <input type="text" id="departmentName" required placeholder="例：広報企画担当">
+            <p class="field-error" id="departmentNameError"></p>
+          </div>
 
-    <section class="card speaker-master-card">
-      <div class="section-heading">
-        <h2>講師マスター管理</h2>
-        <p>診療科・職種と講師名を登録すると、このブラウザ内に保存され、講座情報入力時の候補として表示されます。</p>
-      </div>
+          <div class="field">
+            <label for="phone">問い合わせ電話番号</label>
+            <input type="tel" id="phone" placeholder="例：03-0000-0000" autocomplete="tel">
+            <p class="field-error" id="phoneError"></p>
+          </div>
 
-      <div class="form-grid">
-        <label>
-          診療科・職種
-          <input id="speakerMasterDepartment" type="text" list="departmentOptionsList" placeholder="例：内科">
-        </label>
-        <label>
-          講師名
-          <input id="speakerMasterName" type="text" placeholder="例：山田 太郎 医師">
-        </label>
-      </div>
+          <div class="field">
+            <label for="websiteUrl">公開講座ホームページURL</label>
+            <input type="url" id="websiteUrl" placeholder="https://example.com" autocomplete="url">
+            <p class="field-error" id="websiteUrlError"></p>
+          </div>
 
-      <div class="master-actions">
-        <button type="button" id="addSpeakerButton" class="primary-button">講師を追加</button>
-        <button type="button" id="deleteSpeakerButton" class="secondary-button">選択した講師を削除</button>
-        <button type="button" id="resetSpeakerMasterButton" class="secondary-button">講師マスターを初期化</button>
-        <span id="speakerMasterStatus" class="status-message" aria-live="polite"></span>
-      </div>
-
-      <label class="wide speaker-master-list-label">
-        登録済み講師
-        <select id="speakerMasterList" class="speaker-master-list" size="8"></select>
-      </label>
-    </section>
-
-    <section class="card venue-master-card">
-      <div class="section-heading">
-        <h2>会場テンプレート管理</h2>
-        <p>よく使う会場を登録すると、このブラウザ内に保存され、講座情報へ自動入力できます。</p>
-      </div>
-
-      <div class="form-grid">
-        <label>
-          テンプレート名
-          <input id="venueTemplateName" type="text" placeholder="例：市民ホール 会議室">
-        </label>
-        <label>
-          会場名
-          <input id="venueTemplateVenueName" type="text" placeholder="例：〇〇市民ホール">
-        </label>
-        <label>
-          会場補足
-          <input id="venueTemplateVenueNote" type="text" placeholder="例：1階会議室">
-        </label>
-        <label>
-          郵便番号
-          <input id="venueTemplatePostalCode" type="text" placeholder="例：〒000-0000">
-        </label>
-        <label class="wide">
-          住所
-          <input id="venueTemplateAddress" type="text" placeholder="例：東京都〇〇区〇〇0-0-0">
-        </label>
-        <label class="wide">
-          アクセス
-          <textarea id="venueTemplateAccess" rows="3" placeholder="例：〇〇駅から徒歩約5分"></textarea>
-        </label>
-      </div>
-
-      <div class="master-actions">
-        <button type="button" id="addVenueTemplateButton" class="primary-button">会場を追加</button>
-        <button type="button" id="deleteVenueTemplateButton" class="secondary-button">選択した会場を削除</button>
-        <button type="button" id="resetVenueTemplatesButton" class="secondary-button">会場テンプレートを初期化</button>
-        <span id="venueTemplateStatus" class="status-message" aria-live="polite"></span>
-      </div>
-
-      <label class="wide master-list-label">
-        登録済み会場
-        <select id="venueTemplateList" class="master-list" size="8"></select>
-      </label>
-    </section>
-
-    <section class="card">
-      <div class="section-heading">
-        <h2>よく使う会場テンプレート</h2>
-        <p>先に会場を選ぶと、会場情報を自動入力できます。</p>
-      </div>
-
-      <div id="venueTemplateButtons" class="template-buttons"></div>
-    </section>
-
-    <section class="card">
-      <div class="section-heading">
-        <h2>講座情報</h2>
-        <p>公開講座ごとの内容を入力してください。開催日を選ぶと曜日が自動入力されます。</p>
-      </div>
-
-      <div class="form-grid">
-        <label class="wide">
-          ホームページ用テーマ
-          <input id="homepageTheme" type="text" placeholder="例：健康づくり">
-        </label>
-        <label class="wide">
-          講演名
-          <input id="lectureTitle" type="text" placeholder="例：今日から始める健康習慣">
-        </label>
-        <label class="wide">
-          講演内容
-          <textarea id="lectureDescription" rows="4" placeholder="講演の概要を入力してください"></textarea>
-        </label>
-        <label>
-          開催日
-          <input id="eventDate" type="date">
-        </label>
-        <label>
-          曜日
-          <input id="dayOfWeek" type="text" placeholder="例：土">
-        </label>
-        <label>
-          開催時間
-          <select id="timeRange">
-            <option value="9:00～10:00">9:00～10:00</option>
-            <option value="9:30～10:30">9:30～10:30</option>
-            <option value="10:00～11:00">10:00～11:00</option>
-            <option value="10:30～11:30">10:30～11:30</option>
-            <option value="11:00～12:00">11:00～12:00</option>
-            <option value="13:00～14:00">13:00～14:00</option>
-            <option value="13:30～14:30">13:30～14:30</option>
-            <option value="14:00～15:00" selected>14:00～15:00</option>
-            <option value="14:30～15:30">14:30～15:30</option>
-            <option value="15:00～16:00">15:00～16:00</option>
-            <option value="15:30～16:30">15:30～16:30</option>
-            <option value="16:00～17:00">16:00～17:00</option>
-            <option value="その他">その他</option>
-          </select>
-        </label>
-        <label id="customTimeRangeField" hidden>
-          その他の開催時間
-          <input id="customTimeRange" type="text" placeholder="例：13:30～15:00">
-        </label>
-        <label>
-          開場時間補足
-          <input id="openingNote" type="text" value="開場30分前">
-        </label>
-        <label>
-          診療科・職種
-          <input id="speakerDepartment" type="text" list="departmentOptionsList" placeholder="例：泌尿器科">
-          <datalist id="departmentOptionsList"></datalist>
-        </label>
-        <label class="wide">
-          講師名
-          <input id="speakerName" type="text" list="speakerOptionsList" placeholder="例：山田 太郎 医師">
-          <datalist id="speakerOptionsList"></datalist>
-        </label>
-        <label>
-          会場名
-          <input id="venueName" type="text">
-        </label>
-        <label>
-          会場補足
-          <input id="venueNote" type="text" placeholder="例：1階会議室">
-        </label>
-        <label>
-          郵便番号
-          <input id="postalCode" type="text" placeholder="例：〒000-0000">
-        </label>
-        <label class="wide">
-          住所
-          <input id="address" type="text">
-        </label>
-        <label class="wide">
-          アクセス
-          <textarea id="access" rows="3"></textarea>
-        </label>
-        <label>
-          定員
-          <input id="capacity" type="text" placeholder="例：30名">
-        </label>
-        <label class="wide">
-          備考
-          <textarea id="notes" rows="3">受講の際は、マスク着用をお願いいたします。</textarea>
-        </label>
-      </div>
-    </section>
-
-    <section class="actions-card">
-      <button type="button" id="generateButton" class="primary-button">コードを生成</button>
-      <button type="button" id="clearButton" class="secondary-button">入力をクリア</button>
-      <button type="button" id="sampleButton" class="secondary-button">サンプルを入力</button>
-    </section>
-
-    <section class="card completion-message-card">
-      <div class="section-heading">
-        <h2>Googleフォーム送信完了メッセージ</h2>
-        <p>基本設定の病院名と電話番号を使って、Googleフォームの送信完了画面に貼り付ける文章を生成します。</p>
-      </div>
-
-      <div class="message-generator-actions">
-        <button type="button" id="generateCompletionMessageButton" class="primary-button">自動生成</button>
-        <div class="copy-area">
-          <span id="completionMessageCopyStatus" class="copy-status" aria-live="polite"></span>
-          <button type="button" id="copyCompletionMessageButton" class="copy-button secondary-button">コピー</button>
+          <div class="field wide">
+            <label for="signatureAddress">署名用の住所</label>
+            <input type="text" id="signatureAddress" placeholder="例：〒173-0001 東京都板橋区本町36-3" autocomplete="street-address">
+            <p class="field-error" id="signatureAddressError"></p>
+          </div>
         </div>
       </div>
-
-      <textarea id="googleFormCompletionMessage" class="generated-message" rows="10" readonly placeholder="「自動生成」を押すと、送信完了メッセージが表示されます。"></textarea>
     </section>
 
-    <section class="outputs" aria-live="polite">
-      <div class="section-heading">
-        <h2>生成結果</h2>
-        <p>各ボックスの「コピー」ボタンから、そのまま貼り付けできます。</p>
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="speaker-master-trigger" aria-expanded="true" aria-controls="speaker-master-panel" data-accordion="speakerMaster">
+        <span>
+          <span class="accordion-title">講師マスター</span>
+          <span class="accordion-help">よく使う講師情報を保存し、講座情報へ反映できます。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="speaker-master-panel" role="region" aria-labelledby="speaker-master-trigger">
+        <div class="form-grid">
+          <div class="field">
+            <label for="masterSpeakerName">講師名</label>
+            <input type="text" id="masterSpeakerName" placeholder="例：山田 太郎">
+          </div>
+          <div class="field">
+            <label for="masterSpeakerRole">診療科・職種</label>
+            <input type="text" id="masterSpeakerRole" placeholder="例：循環器内科 医師">
+          </div>
+        </div>
+        <div class="actions compact">
+          <button type="button" id="addSpeakerButton" class="primary-button">講師を追加</button>
+          <button type="button" id="resetSpeakersButton" class="danger-button">講師マスター初期化</button>
+        </div>
+        <div id="speakerList" class="master-list" aria-live="polite"></div>
       </div>
+    </section>
 
-      <div id="outputList" class="output-list">
-        <p class="empty-message">講座情報を入力し、「コードを生成」を押してください。</p>
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="venue-master-trigger" aria-expanded="true" aria-controls="venue-master-panel" data-accordion="venueTemplates">
+        <span>
+          <span class="accordion-title">会場テンプレート</span>
+          <span class="accordion-help">会場名、住所、アクセスをテンプレート化します。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="venue-master-panel" role="region" aria-labelledby="venue-master-trigger">
+        <div class="form-grid">
+          <div class="field">
+            <label for="masterVenueName">会場名</label>
+            <input type="text" id="masterVenueName" placeholder="例：明理会東京大和病院">
+          </div>
+          <div class="field">
+            <label for="masterVenueNote">会場補足</label>
+            <input type="text" id="masterVenueNote" placeholder="例：1階会議室">
+          </div>
+          <div class="field">
+            <label for="masterPostalCode">郵便番号</label>
+            <input type="text" id="masterPostalCode" inputmode="numeric" maxlength="7" pattern="[0-9]{7}" placeholder="例：1730001">
+          </div>
+          <div class="field">
+            <label for="masterAddress">住所</label>
+            <input type="text" id="masterAddress" placeholder="例：東京都板橋区本町36-3">
+          </div>
+          <div class="field wide">
+            <label for="masterAccess">アクセス</label>
+            <textarea id="masterAccess" rows="3" placeholder="例：都営三田線「新板橋駅」から約4分、JR「板橋駅」から約1分"></textarea>
+          </div>
+        </div>
+        <div class="actions compact">
+          <button type="button" id="addVenueButton" class="primary-button">会場を追加</button>
+          <button type="button" id="resetVenuesButton" class="danger-button">会場テンプレート初期化</button>
+        </div>
+        <div id="venueList" class="master-list" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="course-trigger" aria-expanded="true" aria-controls="course-panel" data-accordion="course">
+        <span>
+          <span class="accordion-title">講座情報</span>
+          <span class="accordion-help">メール本文とApps Scriptに反映する公開講座の内容です。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+
+      <div class="accordion-panel" id="course-panel" role="region" aria-labelledby="course-trigger">
+        <form id="courseForm" novalidate>
+          <div class="form-grid">
+            <div class="field wide">
+              <label for="lectureTitle">講演名 <span class="required-mark">*</span></label>
+              <input type="text" id="lectureTitle" required placeholder="例：心臓病を予防するための生活習慣">
+              <p class="field-error" id="lectureTitleError"></p>
+            </div>
+
+            <div class="field wide">
+              <label for="lectureContent">講演内容</label>
+              <textarea id="lectureContent" rows="4" placeholder="例：専門医が、日常生活でできる予防のポイントをわかりやすく解説します。"></textarea>
+              <p class="field-error" id="lectureContentError"></p>
+            </div>
+
+            <div class="field">
+              <label for="eventDate">開催日 <span class="required-mark">*</span></label>
+              <input type="date" id="eventDate" required>
+              <p class="field-error" id="eventDateError"></p>
+            </div>
+
+            <div class="field">
+              <label for="weekday">曜日</label>
+              <input type="text" id="weekday" readonly placeholder="開催日から自動入力">
+            </div>
+
+            <div class="field">
+              <label for="dateFormat">日付表記</label>
+              <select id="dateFormat">
+                <option value="western">西暦</option>
+                <option value="japanese">和暦</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="timePreset">開催時間</label>
+              <select id="timePreset">
+                <option value="range">開始・終了時間を指定</option>
+                <option value="morning">午前の部 10:00〜11:30</option>
+                <option value="afternoon">午後の部 14:00〜15:30</option>
+                <option value="other">その他</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="startTime">開始時間</label>
+              <input type="time" id="startTime">
+            </div>
+
+            <div class="field">
+              <label for="endTime">終了時間</label>
+              <input type="time" id="endTime">
+            </div>
+
+            <div class="field wide hidden" id="customTimeField">
+              <label for="customTimeText">その他の開催時間</label>
+              <input type="text" id="customTimeText" placeholder="例：13:30〜15:00、受付開始13:00">
+            </div>
+
+            <div class="field">
+              <label for="openNote">開場時間補足</label>
+              <input type="text" id="openNote" placeholder="例：開場30分前">
+            </div>
+
+            <div class="field">
+              <label for="speaker">講師 <span class="required-mark">*</span></label>
+              <input type="text" id="speaker" required placeholder="例：山田 太郎">
+              <p class="field-error" id="speakerError"></p>
+            </div>
+
+            <div class="field">
+              <label for="speakerRole">診療科・職種</label>
+              <input type="text" id="speakerRole" placeholder="例：循環器内科 医師">
+            </div>
+
+            <div class="field">
+              <label for="venueName">会場名 <span class="required-mark">*</span></label>
+              <input type="text" id="venueName" required placeholder="例：明理会東京大和病院">
+              <p class="field-error" id="venueNameError"></p>
+            </div>
+
+            <div class="field">
+              <label for="venueNote">会場補足</label>
+              <input type="text" id="venueNote" placeholder="例：1階会議室、2階Aホールなど">
+            </div>
+
+            <div class="field">
+              <label for="postalCode">郵便番号</label>
+              <input type="text" id="postalCode" inputmode="numeric" maxlength="7" pattern="[0-9]{7}" placeholder="例：1730001" aria-describedby="postalCodeHelp postalCodeError">
+              <p class="field-help" id="postalCodeHelp">住所自動補完は外部API送信を避けるため未使用です。7桁数字で入力してください。</p>
+              <p class="field-error" id="postalCodeError"></p>
+            </div>
+
+            <div class="field wide">
+              <label for="address">住所</label>
+              <input type="text" id="address" placeholder="例：東京都板橋区本町36-3" autocomplete="street-address">
+            </div>
+
+            <div class="field wide">
+              <label for="access">アクセス</label>
+              <textarea id="access" rows="3" placeholder="例：都営三田線「新板橋駅」から約4分、JR「板橋駅」から約1分"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="capacity">定員</label>
+              <input type="text" id="capacity" placeholder="例：80名">
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="generateButton" class="primary-button">コードを生成</button>
+            <button type="button" id="clearButton" class="secondary-button">入力をクリア</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="message-trigger" aria-expanded="true" aria-controls="message-panel" data-accordion="message">
+        <span>
+          <span class="accordion-title">フォーム完了メッセージ</span>
+          <span class="accordion-help">Googleフォームの説明や完了画面に使える案内文です。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="message-panel" role="region" aria-labelledby="message-trigger">
+        <article class="output-box">
+          <div class="output-header">
+            <h3>フォーム案内文プレビュー</h3>
+            <button type="button" class="copy-button" data-copy-target="formMessagePreview" aria-label="フォーム案内文プレビューをコピー">コピー</button>
+          </div>
+          <pre><code id="formMessagePreview"></code></pre>
+          <p class="copy-status" id="formMessagePreviewStatus" aria-live="polite"></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="tool-card">
+      <button class="accordion-trigger" type="button" id="output-trigger" aria-expanded="true" aria-controls="output-panel" data-accordion="output">
+        <span>
+          <span class="accordion-title">生成結果</span>
+          <span class="accordion-help">Google Apps Scriptへ貼り付けるコードと本文プレビューです。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="output-panel" role="region" aria-labelledby="output-trigger">
+        <div class="output-grid">
+          <article class="output-box">
+            <div class="output-header">
+              <h3>自動返信メール用コード autoReply</h3>
+              <button type="button" class="copy-button" data-copy-target="autoReplyCode" aria-label="自動返信メール用コードをコピー">コピー</button>
+            </div>
+            <pre><code id="autoReplyCode"></code></pre>
+            <p class="copy-status" id="autoReplyCodeStatus" aria-live="polite"></p>
+          </article>
+
+          <article class="output-box">
+            <div class="output-header">
+              <h3>リマインダーメール用コード sendReminder</h3>
+              <button type="button" class="copy-button" data-copy-target="reminderCode" aria-label="リマインダーメール用コードをコピー">コピー</button>
+            </div>
+            <pre><code id="reminderCode"></code></pre>
+            <p class="copy-status" id="reminderCodeStatus" aria-live="polite"></p>
+          </article>
+
+          <article class="output-box">
+            <div class="output-header">
+              <h3>自動返信メール本文プレビュー</h3>
+              <button type="button" class="copy-button" data-copy-target="autoReplyPreview" aria-label="自動返信メール本文プレビューをコピー">コピー</button>
+            </div>
+            <pre><code id="autoReplyPreview"></code></pre>
+            <p class="copy-status" id="autoReplyPreviewStatus" aria-live="polite"></p>
+          </article>
+
+          <article class="output-box">
+            <div class="output-header">
+              <h3>リマインダーメール本文プレビュー</h3>
+              <button type="button" class="copy-button" data-copy-target="reminderPreview" aria-label="リマインダーメール本文プレビューをコピー">コピー</button>
+            </div>
+            <pre><code id="reminderPreview"></code></pre>
+            <p class="copy-status" id="reminderPreviewStatus" aria-live="polite"></p>
+          </article>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="container">
-      <p>入力内容はブラウザ内だけで処理され、外部へ送信されません。</p>
-    </div>
-  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="script.js"></script>
 </body>

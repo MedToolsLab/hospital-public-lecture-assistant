@@ -1,1230 +1,1080 @@
-"use strict";
+const STORAGE_KEY = "publicLectureAssistantState";
+const ACCORDION_KEY = "publicLectureAssistantAccordionState";
 
-const BASIC_SETTINGS_STORAGE_KEY = "publicLectureAssistant.basicSettings.v1";
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-const MAIL_SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-
-const departmentOptions = [
-  "泌尿器科",
-  "婦人科",
-  "乳腺外科",
-  "内科",
-  "消化器内科",
-  "腎臓内科",
-  "消化器外科",
-  "循環器内科",
-  "呼吸器内科",
-  "皮膚科",
-  "リハビリテーション科",
-  "放射線科",
-  "脳神経外科",
-  "医療ソーシャルワーカー",
-  "入退院支援室"
-];
-
-const SPEAKER_MASTER_STORAGE_KEY = "publicLectureSpeakerMaster";
-const VENUE_TEMPLATES_STORAGE_KEY = "publicLectureVenueTemplates";
-
-const defaultSpeakerMaster = {
-  "内科": ["山田 太郎 医師"],
-  "外科": ["佐藤 花子 医師"],
-  "リハビリテーション科": ["理学療法士 鈴木 一郎"],
-  "医療ソーシャルワーカー": ["田中 美咲"]
+const defaultSettings = {
+  hospitalName: "明理会東京大和病院",
+  departmentName: "広報企画担当",
+  phone: "",
+  websiteUrl: "",
+  signatureAddress: ""
 };
 
-let speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
-
-const speakerTitleKeywords = [
-  "診療放射線技師",
-  "臨床検査技師",
-  "医療ソーシャルワーカー",
-  "理学療法士",
-  "作業療法士",
-  "言語聴覚士",
-  "管理栄養士",
-  "看護部長",
-  "薬剤師",
-  "看護師",
-  "保健師",
-  "助産師",
-  "技師長",
-  "医師",
-  "主任",
-  "係長",
-  "課長",
-  "部長",
-  "医長"
-];
-
-// 入力項目のIDを一元管理し、将来の保存機能追加時に扱いやすくします。
-const BASIC_FIELDS = [
+const fields = [
   "hospitalName",
   "departmentName",
-  "phoneNumber",
-  "eventUrl",
+  "phone",
+  "websiteUrl",
   "signatureAddress",
-  "senderName"
-];
-
-const EVENT_FIELDS = [
-  "homepageTheme",
   "lectureTitle",
-  "lectureDescription",
+  "lectureContent",
   "eventDate",
-  "dayOfWeek",
-  "timeRange",
-  "customTimeRange",
-  "openingNote",
-  "speakerDepartment",
-  "speakerName",
+  "weekday",
+  "dateFormat",
+  "timePreset",
+  "startTime",
+  "endTime",
+  "customTimeText",
+  "openNote",
+  "speaker",
+  "speakerRole",
   "venueName",
   "venueNote",
   "postalCode",
   "address",
   "access",
-  "capacity",
-  "notes"
+  "capacity"
 ];
 
-const VENUE_FIELD_IDS = [
-  "venueName",
-  "venueNote",
-  "postalCode",
-  "address",
-  "access"
+const requiredFields = [
+  { id: "hospitalName", label: "署名用の病院名" },
+  { id: "departmentName", label: "署名用の部署名" },
+  { id: "lectureTitle", label: "講演名" },
+  { id: "eventDate", label: "開催日" },
+  { id: "speaker", label: "講師" },
+  { id: "venueName", label: "会場名" }
 ];
 
-const OUTPUT_DEFINITIONS = [
-  ["autoReplyScript", "自動返信メール用 Apps Script"],
-  ["reminderScript", "リマインダーメール用 Apps Script"],
-  ["autoReplyPreview", "自動返信メール本文プレビュー"],
-  ["reminderPreview", "リマインダーメール本文プレビュー"],
-  ["formDescription", "Googleフォーム説明文"],
-  ["formConfirmation", "Googleフォーム送信完了画面文"],
-  ["homepageNotice", "ホームページ掲載用の注意文"],
-  ["homepageListing", "ホームページ掲載文"]
+const outputIds = [
+  "formMessagePreview",
+  "autoReplyCode",
+  "reminderCode",
+  "autoReplyPreview",
+  "reminderPreview"
 ];
 
-const defaultVenueTemplates = {
-  sampleHall: {
-    templateName: "市民ホール 会議室",
-    venueName: "〇〇市民ホール",
-    venueNote: "1階会議室",
-    postalCode: "〒000-0000",
-    address: "東京都〇〇区〇〇0-0-0",
-    access: "〇〇駅から徒歩約5分"
-  },
-  sampleHospital: {
-    templateName: "院内会議室",
-    venueName: "〇〇病院",
-    venueNote: "1階会議室",
-    postalCode: "〒000-0000",
-    address: "東京都〇〇区〇〇0-0-0",
-    access: "〇〇駅から徒歩約3分"
-  }
-};
-
-let venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
-
-const DEFAULT_VALUES = {
-  hospitalName: "〇〇病院",
-  departmentName: "地域連携室 広報担当",
-  phoneNumber: "00-0000-0000",
-  eventUrl: "https://example.com/event/",
-  signatureAddress: "〒000-0000 東京都〇〇区〇〇0-0-0",
-  senderName: "〇〇病院 広報担当",
-  homepageTheme: "",
-  openingNote: "開場30分前",
-  notes: "受講の際は、マスク着用をお願いいたします。"
-};
+let speakerMaster = [];
+let venueTemplates = [];
+let toastTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadSavedBasicSettings();
-  initializeBasicSettingsPanel();
-  initializeDateAutoWeekday();
-  initializeTimeRangeSelector();
-  initializeDepartmentDatalist();
-  loadSpeakerMaster();
-  loadVenueTemplates();
-  initializeSpeakerMasterManager();
-  initializeVenueTemplateManager();
-  initializeSpeakerDatalist();
-
-  document.getElementById("generateButton").addEventListener("click", handleGenerate);
-  document.getElementById("clearButton").addEventListener("click", clearEventFields);
-  document.getElementById("sampleButton").addEventListener("click", fillSample);
-  document.getElementById("saveBasicSettingsButton").addEventListener("click", saveBasicSettings);
-  document.getElementById("resetBasicSettingsButton").addEventListener("click", resetBasicSettings);
-  document.getElementById("generateCompletionMessageButton").addEventListener("click", generateGoogleFormCompletionMessage);
-  document.getElementById("copyCompletionMessageButton").addEventListener("click", copyGoogleFormCompletionMessage);
-  initializeVenueTemplateButtons();
+  loadState();
+  setupEvents();
+  setupAccordions();
+  updateWeekday();
+  updateTimeControls();
+  renderMasters();
+  generateAll(false);
 });
 
-function getInputValue(id) {
-  return document.getElementById(id).value.trim();
-}
+function setupEvents() {
+  document.getElementById("generateButton").addEventListener("click", () => generateAll(true));
+  document.getElementById("clearButton").addEventListener("click", clearForm);
+  document.getElementById("eventDate").addEventListener("change", updateWeekday);
+  document.getElementById("timePreset").addEventListener("change", updateTimeControls);
+  document.getElementById("postalCode").addEventListener("input", normalizePostalCode);
+  document.getElementById("masterPostalCode").addEventListener("input", normalizePostalCode);
+  document.getElementById("addSpeakerButton").addEventListener("click", addSpeaker);
+  document.getElementById("addVenueButton").addEventListener("click", addVenue);
+  document.getElementById("resetSettingsButton").addEventListener("click", resetSettings);
+  document.getElementById("resetSpeakersButton").addEventListener("click", resetSpeakers);
+  document.getElementById("resetVenuesButton").addEventListener("click", resetVenues);
+  document.getElementById("exportButton").addEventListener("click", exportBackup);
+  document.getElementById("importButton").addEventListener("click", () => document.getElementById("importFile").click());
+  document.getElementById("importFile").addEventListener("change", importBackup);
 
-function setInputValue(id, value) {
-  document.getElementById(id).value = value || "";
-}
+  fields.forEach((id) => {
+    const element = document.getElementById(id);
+    if (!element || element.readOnly) {
+      return;
+    }
 
-function collectFormData() {
-  const data = {};
-  [...BASIC_FIELDS, ...EVENT_FIELDS].forEach((id) => {
-    data[id] = getInputValue(id);
+    element.addEventListener("input", () => {
+      clearFieldError(id);
+      saveState();
+    });
+    element.addEventListener("change", () => {
+      clearFieldError(id);
+      saveState();
+    });
   });
-  data.speakerName = normalizeSpeakerName(data.speakerName);
+
+  document.querySelectorAll(".copy-button").forEach((button) => {
+    button.addEventListener("click", () => copyOutput(button));
+  });
+}
+
+function setupAccordions() {
+  const savedState = readJson(ACCORDION_KEY, {});
+
+  document.querySelectorAll(".accordion-trigger").forEach((button) => {
+    const key = button.dataset.accordion;
+    const panel = document.getElementById(button.getAttribute("aria-controls"));
+    const expanded = savedState[key] !== false;
+
+    setAccordionState(button, panel, expanded);
+
+    button.addEventListener("click", () => {
+      const nextExpanded = button.getAttribute("aria-expanded") !== "true";
+      setAccordionState(button, panel, nextExpanded);
+      savedState[key] = nextExpanded;
+      localStorage.setItem(ACCORDION_KEY, JSON.stringify(savedState));
+    });
+  });
+}
+
+function setAccordionState(button, panel, expanded) {
+  button.setAttribute("aria-expanded", String(expanded));
+  panel.hidden = !expanded;
+}
+
+function loadState() {
+  const state = readJson(STORAGE_KEY, {});
+  const values = { ...defaultSettings, ...(state.basicSettings || {}), ...(state.course || {}) };
+
+  fields.forEach((id) => {
+    const element = document.getElementById(id);
+    if (element && values[id] !== undefined) {
+      element.value = values[id];
+    }
+  });
+
+  speakerMaster = Array.isArray(state.speakerMaster) ? state.speakerMaster : [];
+  venueTemplates = Array.isArray(state.venueTemplates) ? state.venueTemplates : [];
+}
+
+function saveState() {
+  const data = getFormData();
+  const state = {
+    basicSettings: pick(data, ["hospitalName", "departmentName", "phone", "websiteUrl", "signatureAddress"]),
+    course: pick(data, [
+      "lectureTitle",
+      "lectureContent",
+      "eventDate",
+      "weekday",
+      "dateFormat",
+      "timePreset",
+      "startTime",
+      "endTime",
+      "customTimeText",
+      "openNote",
+      "speaker",
+      "speakerRole",
+      "venueName",
+      "venueNote",
+      "postalCode",
+      "address",
+      "access",
+      "capacity"
+    ]),
+    speakerMaster,
+    venueTemplates
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function pick(source, keys) {
+  return keys.reduce((result, key) => {
+    result[key] = source[key] || "";
+    return result;
+  }, {});
+}
+
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || fallback;
+  } catch (error) {
+    console.error(`${key}の読み込みに失敗しました`, error);
+    return fallback;
+  }
+}
+
+function getFormData() {
+  const data = {};
+
+  fields.forEach((id) => {
+    const element = document.getElementById(id);
+    data[id] = element ? element.value.trim() : "";
+  });
+
+  data.displayDate = formatDateText(data.eventDate, data.dateFormat);
+  data.displayTime = formatTimeRange(data);
+
   return data;
 }
 
-function collectBasicSettings() {
-  const settings = {};
-  BASIC_FIELDS.forEach((id) => {
-    settings[id] = getInputValue(id);
-  });
-  return settings;
-}
-
-function initializeBasicSettingsPanel() {
-  const toggleButton = document.getElementById("toggleBasicSettingsButton");
-  toggleButton.addEventListener("click", toggleBasicSettingsPanel);
-  setBasicSettingsPanelOpen(false);
-}
-
-function toggleBasicSettingsPanel() {
-  const panel = document.getElementById("basicSettingsPanel");
-  setBasicSettingsPanelOpen(panel.hidden);
-}
-
-function setBasicSettingsPanelOpen(isOpen) {
-  const panel = document.getElementById("basicSettingsPanel");
-  const toggleButton = document.getElementById("toggleBasicSettingsButton");
-
-  panel.hidden = !isOpen;
-  toggleButton.setAttribute("aria-expanded", String(isOpen));
-  toggleButton.textContent = isOpen ? "基本設定を閉じる" : "基本設定を開く";
-}
-
-function initializeDateAutoWeekday() {
-  document.getElementById("eventDate").addEventListener("change", updateWeekdayFromEventDate);
-}
-
-function updateWeekdayFromEventDate() {
-  const eventDate = getInputValue("eventDate");
-  if (!eventDate) return;
-
-  const [year, month, day] = eventDate.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  setInputValue("dayOfWeek", WEEKDAY_LABELS[date.getDay()]);
-}
-
-function initializeTimeRangeSelector() {
-  const timeRangeSelect = document.getElementById("timeRange");
-  timeRangeSelect.addEventListener("change", updateCustomTimeRangeVisibility);
-  updateCustomTimeRangeVisibility();
-}
-
-function updateCustomTimeRangeVisibility() {
-  const isCustom = getInputValue("timeRange") === "その他";
-  document.getElementById("customTimeRangeField").hidden = !isCustom;
-
-  if (!isCustom) {
-    setInputValue("customTimeRange", "");
-  }
-}
-
-function initializeDepartmentDatalist() {
-  const departmentList = document.getElementById("departmentOptionsList");
-  departmentList.innerHTML = "";
-
-  departmentOptions.forEach((department) => {
-    const option = document.createElement("option");
-    option.value = department;
-    departmentList.append(option);
-  });
-}
-
-function cloneVenueTemplates(templates) {
-  return Object.fromEntries(Object.entries(templates || {}).map(([key, template]) => [key, { ...template }]));
-}
-
-function loadVenueTemplates() {
-  try {
-    const saved = localStorage.getItem(VENUE_TEMPLATES_STORAGE_KEY);
-    venueTemplates = saved ? normalizeVenueTemplates(JSON.parse(saved)) : cloneVenueTemplates(defaultVenueTemplates);
-  } catch (error) {
-    console.error("loadVenueTemplates error", error);
-    venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
-  }
-}
-
-function saveVenueTemplates() {
-  localStorage.setItem(VENUE_TEMPLATES_STORAGE_KEY, JSON.stringify(venueTemplates));
-}
-
-function normalizeVenueTemplates(templates) {
-  const normalized = {};
-  Object.entries(templates || {}).forEach(([key, template]) => {
-    if (!template || typeof template !== "object") return;
-    const cleanTemplate = {
-      templateName: String(template.templateName || template.venueName || "").trim(),
-      venueName: String(template.venueName || "").trim(),
-      venueNote: String(template.venueNote || "").trim(),
-      postalCode: String(template.postalCode || "").trim(),
-      address: String(template.address || "").trim(),
-      access: String(template.access || "").trim()
-    };
-    if (cleanTemplate.templateName && cleanTemplate.venueName) normalized[key] = cleanTemplate;
-  });
-  return Object.keys(normalized).length ? normalized : cloneVenueTemplates(defaultVenueTemplates);
-}
-
-function initializeVenueTemplateManager() {
-  document.getElementById("addVenueTemplateButton").addEventListener("click", addVenueTemplate);
-  document.getElementById("deleteVenueTemplateButton").addEventListener("click", deleteSelectedVenueTemplate);
-  document.getElementById("resetVenueTemplatesButton").addEventListener("click", resetVenueTemplates);
-  renderVenueTemplateList();
-}
-
-function addVenueTemplate() {
-  const template = {
-    templateName: getInputValue("venueTemplateName"),
-    venueName: getInputValue("venueTemplateVenueName"),
-    venueNote: getInputValue("venueTemplateVenueNote"),
-    postalCode: getInputValue("venueTemplatePostalCode"),
-    address: getInputValue("venueTemplateAddress"),
-    access: getInputValue("venueTemplateAccess")
-  };
-
-  if (!template.templateName || !template.venueName) {
-    showVenueTemplateStatus("テンプレート名と会場名を入力してください。");
+function generateAll(shouldValidate) {
+  if (shouldValidate && !validateForm()) {
+    showToast("未入力または形式エラーの項目があります。");
     return;
   }
 
-  const key = createVenueTemplateKey();
-  venueTemplates[key] = template;
-  saveVenueTemplates();
-  renderVenueTemplateList();
-  renderVenueTemplateButtons();
-  clearVenueTemplateForm();
-  showVenueTemplateStatus("会場を追加しました。");
+  const data = getFormData();
+  const autoReplyBody = buildAutoReplyBody(data, "山田 花子");
+  const reminderBody = buildReminderBody(data, "山田 花子", 3);
+
+  setOutput("formMessagePreview", buildFormMessage(data));
+  setOutput("autoReplyCode", buildAutoReplyCode(data));
+  setOutput("reminderCode", buildReminderCode(data));
+  setOutput("autoReplyPreview", autoReplyBody);
+  setOutput("reminderPreview", reminderBody);
+  saveState();
+
+  if (shouldValidate) {
+    showToast("コードを生成しました。");
+  }
 }
 
-function deleteSelectedVenueTemplate() {
-  const selectedKey = document.getElementById("venueTemplateList").value;
-  if (!selectedKey) {
-    showVenueTemplateStatus("削除する会場を選択してください。");
+function validateForm() {
+  clearAllErrors();
+  const data = getFormData();
+  let firstInvalid = null;
+
+  requiredFields.forEach((field) => {
+    if (!data[field.id]) {
+      setFieldError(field.id, `${field.label}は必須です。`);
+      firstInvalid = firstInvalid || document.getElementById(field.id);
+    }
+  });
+
+  if (data.postalCode && !/^[0-9]{7}$/.test(data.postalCode)) {
+    setFieldError("postalCode", "郵便番号はハイフンなしの7桁数字で入力してください。");
+    firstInvalid = firstInvalid || document.getElementById("postalCode");
+  }
+
+  if (firstInvalid) {
+    expandParentAccordion(firstInvalid);
+    firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+    firstInvalid.focus({ preventScroll: true });
+    return false;
+  }
+
+  return true;
+}
+
+function setFieldError(id, message) {
+  const element = document.getElementById(id);
+  const field = element ? element.closest(".field") : null;
+  const error = document.getElementById(`${id}Error`);
+
+  if (field) {
+    field.classList.add("is-invalid");
+  }
+  if (element) {
+    element.setAttribute("aria-invalid", "true");
+    element.setAttribute("aria-describedby", id === "postalCode" ? "postalCodeHelp postalCodeError" : `${id}Error`);
+  }
+  if (error) {
+    error.textContent = message;
+  }
+}
+
+function clearFieldError(id) {
+  const element = document.getElementById(id);
+  const field = element ? element.closest(".field") : null;
+  const error = document.getElementById(`${id}Error`);
+
+  if (field) {
+    field.classList.remove("is-invalid");
+  }
+  if (element) {
+    element.removeAttribute("aria-invalid");
+  }
+  if (error) {
+    error.textContent = "";
+  }
+}
+
+function clearAllErrors() {
+  fields.forEach(clearFieldError);
+}
+
+function expandParentAccordion(element) {
+  const panel = element.closest(".accordion-panel");
+  if (!panel || !panel.hidden) {
     return;
   }
 
-  delete venueTemplates[selectedKey];
-  saveVenueTemplates();
-  renderVenueTemplateList();
-  renderVenueTemplateButtons();
-  showVenueTemplateStatus("選択した会場を削除しました。");
-}
-
-function resetVenueTemplates() {
-  venueTemplates = cloneVenueTemplates(defaultVenueTemplates);
-  saveVenueTemplates();
-  renderVenueTemplateList();
-  renderVenueTemplateButtons();
-  clearVenueTemplateForm();
-  showVenueTemplateStatus("会場テンプレートを初期化しました。");
-}
-
-function renderVenueTemplateList() {
-  const list = document.getElementById("venueTemplateList");
-  list.innerHTML = "";
-  Object.entries(venueTemplates).forEach(([key, template]) => {
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = template.templateName + " / " + template.venueName + (template.venueNote ? "（" + template.venueNote + "）" : "");
-    list.append(option);
-  });
-}
-
-function renderVenueTemplateButtons() {
-  const container = document.getElementById("venueTemplateButtons");
-  container.innerHTML = "";
-  Object.entries(venueTemplates).forEach(([key, template]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "secondary-button";
-    button.dataset.template = key;
-    button.textContent = template.templateName;
-    button.addEventListener("click", () => applyVenueTemplate(key));
-    container.append(button);
-  });
-}
-
-function clearVenueTemplateForm() {
-  ["venueTemplateName", "venueTemplateVenueName", "venueTemplateVenueNote", "venueTemplatePostalCode", "venueTemplateAddress", "venueTemplateAccess"].forEach((id) => setInputValue(id, ""));
-}
-
-function showVenueTemplateStatus(message) {
-  const status = document.getElementById("venueTemplateStatus");
-  status.textContent = message;
-  window.setTimeout(() => { status.textContent = ""; }, 2400);
-}
-
-function createVenueTemplateKey() {
-  const base = "venue" + Date.now().toString(36);
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return base + suffix;
-}
-
-function cloneSpeakerMaster(master) {
-  return Object.fromEntries(Object.entries(master || {}).map(([department, speakers]) => [department, [...speakers]]));
-}
-
-function loadSpeakerMaster() {
-  try {
-    const saved = localStorage.getItem(SPEAKER_MASTER_STORAGE_KEY);
-    speakerMaster = saved ? normalizeSpeakerMaster(JSON.parse(saved)) : cloneSpeakerMaster(defaultSpeakerMaster);
-  } catch (error) {
-    console.error("loadSpeakerMaster error", error);
-    speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
+  const button = document.querySelector(`[aria-controls="${panel.id}"]`);
+  if (button) {
+    setAccordionState(button, panel, true);
   }
 }
 
-function saveSpeakerMaster() {
-  localStorage.setItem(SPEAKER_MASTER_STORAGE_KEY, JSON.stringify(speakerMaster));
-}
-
-function normalizeSpeakerMaster(master) {
-  const normalized = {};
-  Object.entries(master || {}).forEach(([department, speakers]) => {
-    if (!department || !Array.isArray(speakers)) return;
-    const cleanSpeakers = [...new Set(speakers.map((speaker) => String(speaker || "").trim()).filter(Boolean))];
-    if (cleanSpeakers.length) normalized[department] = cleanSpeakers;
-  });
-  return Object.keys(normalized).length ? normalized : cloneSpeakerMaster(defaultSpeakerMaster);
-}
-
-function initializeSpeakerMasterManager() {
-  document.getElementById("addSpeakerButton").addEventListener("click", addSpeakerToMaster);
-  document.getElementById("deleteSpeakerButton").addEventListener("click", deleteSelectedSpeakerFromMaster);
-  document.getElementById("resetSpeakerMasterButton").addEventListener("click", resetSpeakerMaster);
-  renderSpeakerMasterList();
-}
-
-function addSpeakerToMaster() {
-  const department = getInputValue("speakerMasterDepartment");
-  const speakerName = normalizeSpeakerName(getInputValue("speakerMasterName"));
-  if (!department || !speakerName) {
-    showSpeakerMasterStatus("診療科・職種と講師名を入力してください。");
+function clearForm() {
+  if (!confirm("講座情報の入力内容をクリアします。よろしいですか？")) {
     return;
   }
-  if (!speakerMaster[department]) speakerMaster[department] = [];
-  if (!speakerMaster[department].includes(speakerName)) speakerMaster[department].push(speakerName);
-  saveSpeakerMaster();
-  renderSpeakerMasterList();
-  updateSpeakerOptions();
-  setInputValue("speakerMasterName", "");
-  showSpeakerMasterStatus("講師を追加しました。");
+
+  document.getElementById("courseForm").reset();
+  fields.forEach((id) => {
+    if (defaultSettings[id] !== undefined) {
+      document.getElementById(id).value = defaultSettings[id];
+    }
+  });
+  updateWeekday();
+  updateTimeControls();
+  clearAllErrors();
+  outputIds.forEach((id) => setOutput(id, ""));
+  clearStatuses();
+  saveState();
+  showToast("入力内容をクリアしました。");
 }
 
-function deleteSelectedSpeakerFromMaster() {
-  const selectedValue = document.getElementById("speakerMasterList").value;
-  if (!selectedValue) {
-    showSpeakerMasterStatus("削除する講師を選択してください。");
+function setOutput(id, text) {
+  document.getElementById(id).textContent = text;
+}
+
+function copyOutput(button) {
+  const targetId = button.dataset.copyTarget;
+  const text = document.getElementById(targetId).textContent;
+  const status = document.getElementById(`${targetId}Status`);
+
+  if (!text) {
+    status.textContent = "コピーする内容がありません";
     return;
   }
-  const selected = JSON.parse(selectedValue);
-  speakerMaster[selected.department] = (speakerMaster[selected.department] || []).filter((speaker) => speaker !== selected.speaker);
-  if (!speakerMaster[selected.department].length) delete speakerMaster[selected.department];
-  saveSpeakerMaster();
-  renderSpeakerMasterList();
-  updateSpeakerOptions();
-  showSpeakerMasterStatus("選択した講師を削除しました。");
-}
 
-function resetSpeakerMaster() {
-  speakerMaster = cloneSpeakerMaster(defaultSpeakerMaster);
-  saveSpeakerMaster();
-  renderSpeakerMasterList();
-  updateSpeakerOptions();
-  showSpeakerMasterStatus("講師マスターを初期化しました。");
-}
-
-function renderSpeakerMasterList() {
-  const list = document.getElementById("speakerMasterList");
-  list.innerHTML = "";
-  Object.entries(speakerMaster).forEach(([department, speakers]) => {
-    const group = document.createElement("optgroup");
-    group.label = department;
-    speakers.forEach((speaker) => {
-      const option = document.createElement("option");
-      option.value = JSON.stringify({ department, speaker });
-      option.textContent = "・" + speaker;
-      group.append(option);
+  copyText(text)
+    .then(() => {
+      clearStatuses();
+      status.textContent = "コピーしました";
+      flashButton(button, "コピーしました");
+      showToast("コピーしました。");
+    })
+    .catch(() => {
+      status.textContent = "コピーに失敗しました。手動で選択してコピーしてください。";
+      showToast("コピーに失敗しました。");
     });
-    list.append(group);
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  // ローカル確認でもコピーできるよう、古い方式を予備として使います。
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      document.execCommand("copy") ? resolve() : reject();
+    } catch (error) {
+      reject(error);
+    } finally {
+      document.body.removeChild(textarea);
+    }
   });
 }
 
-function showSpeakerMasterStatus(message) {
-  const status = document.getElementById("speakerMasterStatus");
-  status.textContent = message;
-  window.setTimeout(() => { status.textContent = ""; }, 2400);
-}
-
-function initializeSpeakerDatalist() {
-  const departmentInput = document.getElementById("speakerDepartment");
-  departmentInput.addEventListener("input", updateSpeakerOptions);
-  departmentInput.addEventListener("change", updateSpeakerOptions);
-  updateSpeakerOptions();
-}
-
-function updateSpeakerOptions() {
-  const speakerList = document.getElementById("speakerOptionsList");
-  const department = getInputValue("speakerDepartment");
-  const speakers = department && speakerMaster[department]
-    ? speakerMaster[department]
-    : getAllSpeakerOptions();
-
-  speakerList.innerHTML = "";
-  speakers.forEach((speaker) => {
-    const option = document.createElement("option");
-    option.value = speaker;
-    speakerList.append(option);
+function clearStatuses() {
+  outputIds.forEach((id) => {
+    document.getElementById(`${id}Status`).textContent = "";
   });
 }
 
-function getAllSpeakerOptions() {
-  return [...new Set(Object.values(speakerMaster).flat())];
-}
-function saveBasicSettings() {
-  try {
-    localStorage.setItem(BASIC_SETTINGS_STORAGE_KEY, JSON.stringify(collectBasicSettings()));
-    showBasicSettingsStatus("保存しました");
-  } catch (error) {
-    console.error("saveBasicSettings error", error);
-    showBasicSettingsStatus("保存できませんでした");
-  }
-}
-
-function loadSavedBasicSettings() {
-  try {
-    const savedSettings = localStorage.getItem(BASIC_SETTINGS_STORAGE_KEY);
-    if (!savedSettings) return;
-
-    const parsedSettings = JSON.parse(savedSettings);
-    BASIC_FIELDS.forEach((id) => {
-      if (typeof parsedSettings[id] === "string") {
-        setInputValue(id, parsedSettings[id]);
-      }
-    });
-  } catch (error) {
-    console.error("loadSavedBasicSettings error", error);
-  }
-}
-
-function resetBasicSettings() {
-  BASIC_FIELDS.forEach((id) => setInputValue(id, DEFAULT_VALUES[id]));
-
-  try {
-    localStorage.removeItem(BASIC_SETTINGS_STORAGE_KEY);
-  } catch (error) {
-    console.error("resetBasicSettings error", error);
-  }
-
-  showBasicSettingsStatus("初期値に戻しました");
-}
-
-function showBasicSettingsStatus(message) {
-  const status = document.getElementById("basicSettingsStatus");
-  status.textContent = message;
+function flashButton(button, doneText) {
+  const originalText = button.textContent;
+  button.textContent = doneText;
+  button.classList.add("is-done");
   window.setTimeout(() => {
-    status.textContent = "";
+    button.textContent = originalText;
+    button.classList.remove("is-done");
+  }, 1600);
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
   }, 2400);
 }
 
-function initializeVenueTemplateButtons() {
-  renderVenueTemplateButtons();
+function normalizePostalCode(event) {
+  event.target.value = event.target.value.replace(/\D/g, "").slice(0, 7);
+  if (event.target.id === "postalCode") {
+    clearFieldError("postalCode");
+  }
 }
 
-function applyVenueTemplate(templateKey) {
-  const template = venueTemplates[templateKey];
-  if (!template) return;
-
-  VENUE_FIELD_IDS.forEach((id) => {
-    setInputValue(id, template[id]);
-  });
+function updateWeekday() {
+  const eventDate = document.getElementById("eventDate").value;
+  document.getElementById("weekday").value = getWeekday(eventDate);
+  saveState();
 }
 
-function clearEventFields() {
-  EVENT_FIELDS.forEach((id) => setInputValue(id, ""));
-  setInputValue("timeRange", "14:00～15:00");
-  updateCustomTimeRangeVisibility();
-  setInputValue("openingNote", DEFAULT_VALUES.openingNote);
-  setInputValue("speakerDepartment", "泌尿器科");
-  updateSpeakerOptions();
-  setInputValue("notes", DEFAULT_VALUES.notes);
-  renderEmptyMessage();
+function getWeekday(dateText) {
+  const date = parseDate(dateText);
+  if (!date) {
+    return "";
+  }
+
+  return ["日", "月", "火", "水", "木", "金", "土"][date.getDay()];
 }
 
-function fillSample() {
-  const sample = {
-    homepageTheme: "健康づくり",
-    lectureTitle: "今日から始める健康習慣",
-    lectureDescription: "日常生活で取り入れられる健康管理のポイントについて、わかりやすくご紹介します。",
-    eventDate: "2026-09-15",
-    dayOfWeek: "火",
-    timeRange: "14:00～15:00",
-    customTimeRange: "",
-    openingNote: DEFAULT_VALUES.openingNote,
-    speakerDepartment: "内科",
-    speakerName: "山田 太郎 医師",
-    venueName: "〇〇市民ホール",
-    venueNote: "1階会議室",
-    postalCode: "〒000-0000",
-    address: "東京都〇〇区〇〇0-0-0",
-    access: "〇〇駅から徒歩約5分",
-    capacity: "30名",
-    notes: DEFAULT_VALUES.notes
-  };
-
-  Object.entries(sample).forEach(([id, value]) => setInputValue(id, value));
-  updateCustomTimeRangeVisibility();
-  updateSpeakerOptions();
+function updateTimeControls() {
+  const preset = document.getElementById("timePreset").value;
+  const customField = document.getElementById("customTimeField");
+  customField.classList.toggle("hidden", preset !== "other");
+  saveState();
 }
 
-function handleGenerate() {
-  const data = collectFormData();
-  const validationMessage = validateBeforeGenerate(data);
-  if (validationMessage) {
-    window.alert(validationMessage);
+function addSpeaker() {
+  const nameInput = document.getElementById("masterSpeakerName");
+  const roleInput = document.getElementById("masterSpeakerRole");
+
+  if (!nameInput.value.trim()) {
+    nameInput.focus();
+    showToast("講師名を入力してください。");
     return;
   }
 
-  setInputValue("speakerName", data.speakerName);
-  const outputs = buildOutputs(data);
-  renderOutputs(outputs);
+  speakerMaster.push({
+    name: nameInput.value.trim(),
+    role: roleInput.value.trim()
+  });
+
+  nameInput.value = "";
+  roleInput.value = "";
+  renderMasters();
+  saveState();
+  flashButton(document.getElementById("addSpeakerButton"), "追加しました");
+  showToast("講師を追加しました。");
 }
 
-function validateBeforeGenerate(data) {
-  if (!data.speakerName) {
-    return "講師名を入力してください。";
+function addVenue() {
+  const nameInput = document.getElementById("masterVenueName");
+
+  if (!nameInput.value.trim()) {
+    nameInput.focus();
+    showToast("会場名を入力してください。");
+    return;
   }
 
-  if (data.capacity.includes("定員")) {
-    return "定員欄には『30名』のように人数のみを入力してください。";
-  }
+  venueTemplates.push({
+    name: nameInput.value.trim(),
+    note: document.getElementById("masterVenueNote").value.trim(),
+    postalCode: document.getElementById("masterPostalCode").value.trim(),
+    address: document.getElementById("masterAddress").value.trim(),
+    access: document.getElementById("masterAccess").value.trim()
+  });
 
-  return "";
+  ["masterVenueName", "masterVenueNote", "masterPostalCode", "masterAddress", "masterAccess"].forEach((id) => {
+    document.getElementById(id).value = "";
+  });
+  renderMasters();
+  saveState();
+  flashButton(document.getElementById("addVenueButton"), "追加しました");
+  showToast("会場を追加しました。");
 }
 
-function normalizeSpeakerName(name) {
-  const trimmedName = (name || "").trim();
-  if (!trimmedName) return "";
-
-  for (const title of speakerTitleKeywords) {
-    if (!trimmedName.endsWith(title)) continue;
-
-    const namePart = trimmedName.slice(0, -title.length).replace(/[ 　]+$/u, "");
-    if (!namePart) return trimmedName;
-
-    return `${namePart} ${title}`;
-  }
-
-  return trimmedName;
+function renderMasters() {
+  renderSpeakerList();
+  renderVenueList();
 }
 
-function buildOutputs(data) {
-  return {
-    autoReplyScript: buildAutoReplyScript(data),
-    reminderScript: buildReminderScript(data),
-    autoReplyPreview: buildAutoReplyBody(data, "申込者"),
-    reminderPreview: buildReminderBody(data, "申込者", 3),
-    formTitle: buildFormTitle(data),
-    formDescription: buildFormDescription(data),
-    formApplicationGuide: buildFormApplicationGuide(data),
-    formConfirmation: buildFormConfirmation(data),
-    homepageNotice: buildHomepageNotice(data),
-    homepageListing: buildHomepageListing(data)
+function renderSpeakerList() {
+  const list = document.getElementById("speakerList");
+  list.innerHTML = "";
+
+  if (speakerMaster.length === 0) {
+    list.innerHTML = '<p class="empty-state">登録済みの講師はありません。</p>';
+    return;
+  }
+
+  speakerMaster.forEach((speakerItem, index) => {
+    const item = document.createElement("div");
+    item.className = "master-item";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(speakerItem.name)}</strong>
+        <span>${escapeHtml(speakerItem.role || "診療科・職種未設定")}</span>
+      </div>
+      <button type="button" class="small-button" data-action="use-speaker" data-index="${index}">反映</button>
+      <button type="button" class="small-button" data-action="delete-speaker" data-index="${index}">削除</button>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => handleSpeakerAction(button));
+  });
+}
+
+function renderVenueList() {
+  const list = document.getElementById("venueList");
+  list.innerHTML = "";
+
+  if (venueTemplates.length === 0) {
+    list.innerHTML = '<p class="empty-state">登録済みの会場テンプレートはありません。</p>';
+    return;
+  }
+
+  venueTemplates.forEach((venueItem, index) => {
+    const item = document.createElement("div");
+    item.className = "master-item";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(venueItem.name)}</strong>
+        <span>${escapeHtml(venueItem.note || venueItem.address || "詳細未設定")}</span>
+      </div>
+      <button type="button" class="small-button" data-action="use-venue" data-index="${index}">反映</button>
+      <button type="button" class="small-button" data-action="delete-venue" data-index="${index}">削除</button>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => handleVenueAction(button));
+  });
+}
+
+function handleSpeakerAction(button) {
+  const index = Number(button.dataset.index);
+
+  if (button.dataset.action === "use-speaker") {
+    const speakerItem = speakerMaster[index];
+    document.getElementById("speaker").value = speakerItem.name;
+    document.getElementById("speakerRole").value = speakerItem.role;
+    saveState();
+    flashButton(button, "反映しました");
+    showToast("講師情報を反映しました。");
+    return;
+  }
+
+  speakerMaster.splice(index, 1);
+  renderSpeakerList();
+  saveState();
+  showToast("講師を削除しました。");
+}
+
+function handleVenueAction(button) {
+  const index = Number(button.dataset.index);
+
+  if (button.dataset.action === "use-venue") {
+    const venueItem = venueTemplates[index];
+    document.getElementById("venueName").value = venueItem.name;
+    document.getElementById("venueNote").value = venueItem.note;
+    document.getElementById("postalCode").value = venueItem.postalCode;
+    document.getElementById("address").value = venueItem.address;
+    document.getElementById("access").value = venueItem.access;
+    saveState();
+    flashButton(button, "反映しました");
+    showToast("会場情報を反映しました。");
+    return;
+  }
+
+  venueTemplates.splice(index, 1);
+  renderVenueList();
+  saveState();
+  showToast("会場を削除しました。");
+}
+
+function resetSettings() {
+  if (!confirm("基本設定を初期値に戻します。よろしいですか？")) {
+    return;
+  }
+
+  Object.entries(defaultSettings).forEach(([key, value]) => {
+    document.getElementById(key).value = value;
+  });
+  saveState();
+  showToast("基本設定を初期値に戻しました。");
+}
+
+function resetSpeakers() {
+  if (!confirm("講師マスターを初期化します。登録済みの講師が削除されます。よろしいですか？")) {
+    return;
+  }
+
+  speakerMaster = [];
+  renderSpeakerList();
+  saveState();
+  showToast("講師マスターを初期化しました。");
+}
+
+function resetVenues() {
+  if (!confirm("会場テンプレートを初期化します。登録済みの会場が削除されます。よろしいですか？")) {
+    return;
+  }
+
+  venueTemplates = [];
+  renderVenueList();
+  saveState();
+  showToast("会場テンプレートを初期化しました。");
+}
+
+function exportBackup() {
+  const data = getFormData();
+  const backup = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    basicSettings: pick(data, ["hospitalName", "departmentName", "phone", "websiteUrl", "signatureAddress"]),
+    speakerMaster,
+    venueTemplates
   };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "public-lecture-assistant-backup.json";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showToast("JSONをエクスポートしました。");
 }
 
-function buildLectureInfo(data) {
-  const dateTime = [formatEventDate(data), getSelectedTimeRange(data)].filter(Boolean).join(" ");
-  const openingText = data.openingNote ? `（${data.openingNote}）` : "";
-  const speakerText = [data.speakerDepartment, data.speakerName].filter(Boolean).join("　");
-  const venueText = data.venueNote ? `${data.venueName}（${data.venueNote}）` : data.venueName;
-  const addressText = [data.postalCode, data.address].filter(Boolean).join(" ");
-
-  return [
-    "【お申込内容】",
-    `●公開講座：『${data.lectureTitle}』`,
-    `●日時：${dateTime}${openingText}`,
-    `●講師：${speakerText}`,
-    data.capacity ? `●定員：${data.capacity}` : "",
-    `●場所：${venueText}`,
-    `住所：${addressText}`,
-    data.access ? `（${data.access}）` : "",
-    `備考：${data.notes}`
-  ].filter(Boolean).join("\n");
-}
-
-function buildSignature(data) {
-  return [
-    MAIL_SEPARATOR,
-    [data.hospitalName, data.departmentName].filter(Boolean).join("　"),
-    data.signatureAddress,
-    `TEL ${data.phoneNumber}`,
-    MAIL_SEPARATOR
-  ].filter(Boolean).join("\n");
-}
-
-function buildAutoReplyBody(data, nameExpression) {
-  const senderLine = [data.hospitalName, data.departmentName].filter(Boolean).join("　");
-
-  return `${nameExpression} 様
-
-お世話になっております。
-${senderLine}です。
-
-この度は、${data.hospitalName}の無料公開講座にお申込みいただき、誠にありがとうございます。
-
-${buildLectureInfo(data)}
-
-当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。
-
-【公開講座ホームページ】
-${data.eventUrl}
-
-${buildSignature(data)}`;
-}
-
-function buildReminderBody(data, nameExpression, daysLeftExpression) {
-  const openingLine = daysLeftExpression === 3
-    ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
-    : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
-  const senderLine = [data.hospitalName, data.departmentName].filter(Boolean).join("　");
-
-  return `${nameExpression} 様
-
-お世話になっております。
-${senderLine}です。
-
-${openingLine}
-当日の内容を改めてご案内いたしますので、ご確認いただけますと幸いです。
-
-${buildLectureInfo(data)}
-
-当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。
-
-【公開講座ホームページ（最新情報はこちら）】
-${data.eventUrl}
-
-${buildSignature(data)}`;
-}
-
-function buildFormDescription(data) {
-  return `【お申し込み後のご案内】
-お申し込み後、数分以内に受付完了メール（自動返信）をお送りしております。
-メールが届かない場合は、まず迷惑メールフォルダをご確認ください。
-迷惑メールフォルダにも届いていない場合は、お手数ですが3営業日以内に下記までお問い合わせください。
-お問い合わせ：${data.phoneNumber}`;
-}
-
-function buildFormConfirmation(data) {
-  return buildGoogleFormCompletionMessage(data);
-}
-
-function generateGoogleFormCompletionMessage() {
-  const message = buildGoogleFormCompletionMessage(collectBasicSettings());
-  document.getElementById("googleFormCompletionMessage").value = message;
-}
-
-function copyGoogleFormCompletionMessage() {
-  const message = document.getElementById("googleFormCompletionMessage").value;
-  const status = document.getElementById("completionMessageCopyStatus");
-
-  copyText(message, status);
-}
-
-function buildGoogleFormCompletionMessage(data) {
-  const hospitalName = getContactHospitalName(data.hospitalName || DEFAULT_VALUES.hospitalName);
-  const phoneNumber = data.phoneNumber || DEFAULT_VALUES.phoneNumber;
-
-  return `お申し込みありがとうございました。
-
-受付完了メール（自動返信）を数分以内にお送りしております。
-
-メールが届かない場合は、まず迷惑メールフォルダをご確認ください。
-
-携帯電話会社（docomo・au・SoftBank等）のメールアドレスをご利用の場合は、受信設定により届かないことがあります。
-
-30分以上経過してもメールが届かない場合は、お手数ですが${hospitalName}（TEL：${phoneNumber}）までお問い合わせください。
-
-当日、皆さまのご参加を心よりお待ちしております。`;
-}
-
-function getContactHospitalName(hospitalName) {
-  return String(hospitalName || "").trim();
-}
-
-function buildHomepageNotice(data) {
-  return `※お申し込み後、数分以内に受付完了メール（自動返信）をお送りしております。メールが届かない場合は、迷惑メールフォルダをご確認ください。届かない場合は3営業日以内に${data.phoneNumber}までお問い合わせください。`;
-}
-
-function buildFormTitle(data) {
-  return data.lectureTitle ? `【無料公開講座】${data.lectureTitle}` : "無料公開講座 お申込みフォーム";
-}
-
-function buildFormApplicationGuide(data) {
-  return [buildFormTitle(data), "", buildLectureInfo(data), "", "お申し込み後、数分以内に受付完了メール（自動返信）をお送りしております。", "メールが届かない場合は、迷惑メールフォルダをご確認ください。"].filter(Boolean).join("\n");
-}
-
-function buildHomepageListing(data) {
-  const month = getEventMonth(data);
-  const theme = data.homepageTheme || data.lectureTitle;
-  const monthText = month ? month + "月" : "";
-  const lectureDescription = formatHomepageLectureDescription(data.lectureDescription);
-  const lines = [
-    "【無料公開講座】" + monthText + "開催のお知らせ",
-    "",
-    (data.hospitalName || DEFAULT_VALUES.hospitalName) + "では、地域の皆さま向けに公開講座を開催しています。",
-    theme ? (monthText || "○月") + "は「" + theme + "」をテーマに、" + buildSpeakerDescription(data) + "。" : "",
-    "参加費無料・事前申込制です。ぜひお気軽にご参加ください。",
-    "",
-    buildHomepageDateTime(data),
-    formatHomepageLectureTitle(data.lectureTitle),
-    buildHomepageSpeakerLine(data),
-    "",
-    lectureDescription,
-    "",
-    buildHomepageVenueBlock(data),
-    "",
-    data.capacity ? "定員：" + data.capacity : "",
-    "",
-    "詳細・お申込み",
-    "公開講座の詳細・お申込みについては、イベントページよりご確認ください。",
-    "",
-    "▶ イベントページはこちら",
-    data.eventUrl
-  ];
-
-  return trimBlankLines(lines).join("\n");
-}
-
-function getEventMonth(data) {
-  if (!data.eventDate) return "";
-  const month = Number(data.eventDate.split("-")[1]);
-  return Number.isFinite(month) ? String(month) : "";
-}
-
-function buildHomepageDateTime(data) {
-  if (!data.eventDate) return "";
-  const [, month, day] = data.eventDate.split("-");
-  const weekdayText = data.dayOfWeek ? "\uFF08" + data.dayOfWeek + "\uFF09" : "";
-  const dateText = Number(month) + "月" + Number(day) + "\u65E5" + weekdayText;
-  const timeText = toFullWidthColon(getSelectedTimeRange(data));
-  const openingText = data.openingNote ? "\uFF08" + data.openingNote + "\uFF09" : "";
-  return [dateText, timeText].filter(Boolean).join(" ") + openingText;
-}
-
-function formatHomepageLectureTitle(title) {
-  return (title || "").replace(/\s*\uFF5E\s*/g, " \uFF5E ").replace(/\s+/g, " ").trim();
-}
-
-function buildHomepageSpeakerLine(data) {
-  const speakerText = [data.speakerDepartment, data.speakerName].filter(Boolean).join("\u3000");
-  return speakerText ? "講師：" + speakerText : "";
-}
-
-function formatHomepageLectureDescription(description) {
-  const trimmed = (description || "").trim();
-  if (!trimmed) return "";
-  if (trimmed.includes("\n")) return trimmed;
-  return trimmed.replace(/\u3002(?=\S)/g, "\u3002\n");
-}
-
-function buildHomepageVenueBlock(data) {
-  const venueText = data.venueNote ? data.venueName + "\uFF08" + data.venueNote + "\uFF09" : data.venueName;
-  const addressText = [data.postalCode, data.address].filter(Boolean).join(" ");
-  return ["会場", venueText, addressText, data.access ? "\uFF08" + data.access + "\uFF09" : ""].filter(Boolean).join("\n");
-}
-
-function buildSpeakerDescription(data) {
-  const department = data.speakerDepartment || "";
-  const speakerName = data.speakerName || "";
-  if (speakerName.includes("医師") && department) return department + "医がわかりやすく解説します";
-  const role = speakerTitleKeywords.find((title) => speakerName.includes(title) || department.includes(title));
-  if (role) return role + "がわかりやすく解説します";
-  return "専門スタッフがわかりやすく解説します";
-}
-
-function toFullWidthColon(text) {
-  return (text || "").replace(/:/g, "\uFF1A");
-}
-
-function trimBlankLines(lines) {
-  const trimmed = lines.map((line) => line || "");
-  while (trimmed.length && trimmed[0] === "") trimmed.shift();
-  while (trimmed.length && trimmed[trimmed.length - 1] === "") trimmed.pop();
-  return trimmed.filter((line, index, array) => line !== "" || (array[index - 1] !== "" && array[index + 1] !== ""));
-}
-function buildAutoReplyScript(data) {
-  const settings = createScriptSettings(data);
-
-  return `/**
- * Googleフォーム送信時に受付完了メールを送信します。
- * 前提：B列がメールアドレス、C列が名前です。
- */
-function autoReply(e) {
-  const SETTINGS = ${toSafeScriptObject(settings)};
-  const SUBJECT = "\u3010\u304a\u7533\u8fbc\u307f\u5b8c\u4e86\u3011" + SETTINGS.hospitalName + " \u7121\u6599\u516c\u958b\u8b1b\u5ea7";
-
-  try {
-    const sheet = e && e.range
-      ? e.range.getSheet()
-      : SpreadsheetApp.getActiveSheet();
-
-    const row = e && e.range
-      ? e.range.getRow()
-      : sheet.getLastRow();
-
-    if (row < 2) return;
-
-    const replyStatusCol = getOrCreateAutoReplyColumn_(sheet, "申込返信済み");
-    const replyDateCol = getOrCreateAutoReplyColumn_(sheet, "返信日時");
-    const email = String(sheet.getRange(row, 2).getValue() || "").trim();
-    const name = String(sheet.getRange(row, 3).getValue() || "").trim() || "申込者";
-
-    if (!email || !email.includes("@")) {
-      sheet.getRange(row, replyStatusCol).setValue("メール取得不可");
-      return;
-    }
-
-    if (sheet.getRange(row, replyStatusCol).getValue() === "送信済み") {
-      return;
-    }
-
-    MailApp.sendEmail({
-      to: email,
-      subject: SUBJECT,
-      body: buildAutoReplyBody_(SETTINGS, name),
-      name: SETTINGS.senderName
-    });
-
-    sheet.getRange(row, replyStatusCol).setValue("送信済み");
-    sheet.getRange(row, replyDateCol).setValue(new Date());
-  } catch (error) {
-    console.error("autoReply error", error);
-  }
-}
-
-function getOrCreateAutoReplyColumn_(sheet, headerName) {
-  const lastColumn = Math.max(sheet.getLastColumn(), 1);
-  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-  const index = headers.indexOf(headerName);
-
-  if (index >= 0) {
-    return index + 1;
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) {
+    return;
   }
 
-  const newColumn = lastColumn + 1;
-  sheet.getRange(1, newColumn).setValue(headerName);
-  return newColumn;
-}
-
-function buildAutoReplyBody_(settings, name) {
-  return name + " 様\n\n"
-    + "お世話になっております。\n"
-    + [settings.hospitalName, settings.departmentName].filter(Boolean).join("　") + "です。\n\n"
-    + "この度は、" + settings.hospitalName + "の無料公開講座にお申込みいただき、誠にありがとうございます。\n\n"
-    + buildAutoReplyLectureInfo_(settings) + "\n\n"
-    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\n\n"
-    + "【公開講座ホームページ】\n"
-    + settings.eventUrl + "\n\n"
-    + buildAutoReplySignature_(settings);
-}
-
-function buildAutoReplyLectureInfo_(settings) {
-  const dateTime = [settings.eventDateText, settings.timeRange].filter(Boolean).join(" ");
-  const openingText = settings.openingNote ? "（" + settings.openingNote + "）" : "";
-  const speakerText = [settings.speakerDepartment, settings.speakerName].filter(Boolean).join("　");
-  const venueText = settings.venueNote ? settings.venueName + "（" + settings.venueNote + "）" : settings.venueName;
-  const addressText = [settings.postalCode, settings.address].filter(Boolean).join(" ");
-
-  return [
-    "【お申込内容】",
-    settings.lectureTitle ? "●公開講座：『" + settings.lectureTitle + "』" : "",
-    dateTime || openingText ? "●日時：" + dateTime + openingText : "",
-    speakerText ? "●講師：" + speakerText : "",
-    settings.capacity ? "●定員：" + settings.capacity : "",
-    venueText ? "●場所：" + venueText : "",
-    addressText ? "住所：" + addressText : "",
-    settings.access ? "（" + settings.access + "）" : "",
-    settings.notes ? "備考：" + settings.notes : ""
-  ].filter(Boolean).join("\\n");
-}
-
-function buildAutoReplySignature_(settings) {
-  return [
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    [settings.hospitalName, settings.departmentName].filter(Boolean).join("　"),
-    settings.signatureAddress,
-    settings.phoneNumber ? "TEL " + settings.phoneNumber : "",
-    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  ].filter(Boolean).join("\\n");
-}`;
-}
-
-function buildReminderScript(data) {
-  const settings = createScriptSettings(data);
-
-  return `/**
- * 開催日の3日前から当日まで、未送信の申込者へリマインドメールを送信します。
- * 前提：B列がメールアドレス、C列が名前です。
- */
-function sendReminder() {
-  const SETTINGS = ${toSafeScriptObject(settings)};
-  const SHEET_NAME = "フォームの回答 1";
-  const SUBJECT = "【確認】無料公開講座の開催が近づいてまいりました";
-
-  let sentCount = 0;
-  let skippedCount = 0;
-  let invalidEmailCount = 0;
-
-  try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
-
-    if (!sheet) {
-      throw new Error("回答シート「" + SHEET_NAME + "」が見つかりません。");
-    }
-
-    const eventDate = parseReminderDate_(SETTINGS.eventDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const daysLeft = Math.floor((eventDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
-    if (daysLeft < 0 || daysLeft > 3) {
-      logReminderResult_(sentCount, skippedCount, invalidEmailCount);
-      return;
-    }
-
-    const reminderStatusCol = getOrCreateReminderColumn_(sheet, "リマインド送信済み");
-    const reminderDateCol = getOrCreateReminderColumn_(sheet, "リマインド日時");
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) {
-      logReminderResult_(sentCount, skippedCount, invalidEmailCount);
-      return;
-    }
-
-    for (let row = 2; row <= lastRow; row++) {
-      const email = String(sheet.getRange(row, 2).getValue() || "").trim();
-      const name = String(sheet.getRange(row, 3).getValue() || "").trim() || "申込者";
-      const status = sheet.getRange(row, reminderStatusCol).getValue();
-
-      if (status === "送信済み") {
-        skippedCount++;
-        continue;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const backup = JSON.parse(reader.result);
+      if (!confirm("JSONバックアップを読み込み、基本設定・講師マスター・会場テンプレートを上書きします。よろしいですか？")) {
+        event.target.value = "";
+        return;
       }
 
-      if (!email || !email.includes("@")) {
-        sheet.getRange(row, reminderStatusCol).setValue("メール取得不可");
-        invalidEmailCount++;
-        continue;
-      }
-
-      try {
-        const sentAt = new Date();
-
-        MailApp.sendEmail({
-          to: email,
-          subject: SUBJECT,
-          body: buildReminderBody_(SETTINGS, name, daysLeft),
-          name: SETTINGS.senderName
-        });
-
-        sheet.getRange(row, reminderStatusCol).setValue("送信済み");
-        sheet.getRange(row, reminderDateCol).setValue(sentAt);
-        sentCount++;
-      } catch (sendError) {
-        sheet.getRange(row, reminderStatusCol).setValue("送信エラー");
-        console.error("sendReminder row error", {
-          row: row,
-          email: email,
-          error: sendError
-        });
-      }
+      Object.entries({ ...defaultSettings, ...(backup.basicSettings || {}) }).forEach(([key, value]) => {
+        if (document.getElementById(key)) {
+          document.getElementById(key).value = value || "";
+        }
+      });
+      speakerMaster = Array.isArray(backup.speakerMaster) ? backup.speakerMaster : [];
+      venueTemplates = Array.isArray(backup.venueTemplates) ? backup.venueTemplates : [];
+      renderMasters();
+      saveState();
+      showToast("JSONをインポートしました。");
+    } catch (error) {
+      console.error("JSONインポートに失敗しました", error);
+      showToast("JSONの読み込みに失敗しました。");
+    } finally {
+      event.target.value = "";
     }
-
-    logReminderResult_(sentCount, skippedCount, invalidEmailCount);
-  } catch (error) {
-    console.error("sendReminder error", error);
-  }
+  };
+  reader.readAsText(file);
 }
 
-function getOrCreateReminderColumn_(sheet, headerName) {
-  const lastColumn = Math.max(sheet.getLastColumn(), 1);
-  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-  const index = headers.indexOf(headerName);
-
-  if (index >= 0) {
-    return index + 1;
-  }
-
-  const newColumn = lastColumn + 1;
-  sheet.getRange(1, newColumn).setValue(headerName);
-  return newColumn;
-}
-
-function parseReminderDate_(dateText) {
-  const parts = String(dateText).split("-").map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-}
-
-function buildReminderBody_(settings, name, daysLeft) {
-  const openingLine = daysLeft === 3
-    ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
-    : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
-
-  return name + " 様\n\n"
-    + "お世話になっております。\n"
-    + [settings.hospitalName, settings.departmentName].filter(Boolean).join("　") + "です。\n\n"
-    + openingLine + "\n"
-    + "当日の内容を改めてご案内いたしますので、ご確認いただけますと幸いです。\n\n"
-    + buildReminderLectureInfo_(settings) + "\n\n"
-    + "当日はスタッフ一同お待ちしておりますので、お気をつけてお越しください。\n\n"
-    + "【公開講座ホームページ（最新情報はこちら）】\n"
-    + settings.eventUrl + "\n\n"
-    + buildReminderSignature_(settings);
-}
-
-function logReminderResult_(sentCount, skippedCount, invalidEmailCount) {
-  console.log("送信件数: " + sentCount);
-  console.log("送信済みスキップ件数: " + skippedCount);
-  console.log("メール取得不可件数: " + invalidEmailCount);
-}`;
-}
-
-function createScriptSettings(data) {
+function buildLectureObject(data) {
   return {
-    hospitalName: data.hospitalName,
-    departmentName: data.departmentName,
-    phoneNumber: data.phoneNumber,
-    eventUrl: data.eventUrl,
-    signatureAddress: data.signatureAddress,
-    senderName: data.senderName,
-    lectureTitle: data.lectureTitle,
+    title: data.lectureTitle,
+    content: data.lectureContent,
     eventDate: data.eventDate,
-    eventDateText: formatEventDate(data),
-    timeRange: getSelectedTimeRange(data),
-    openingNote: data.openingNote,
-    speakerDepartment: data.speakerDepartment,
-    speakerName: data.speakerName,
+    dateFormat: data.dateFormat,
+    displayDate: data.displayDate,
+    weekday: data.weekday,
+    timeText: data.displayTime,
+    openNote: data.openNote,
+    speaker: data.speaker,
+    speakerRole: data.speakerRole,
     venueName: data.venueName,
     venueNote: data.venueNote,
     postalCode: data.postalCode,
     address: data.address,
     access: data.access,
     capacity: data.capacity,
-    notes: data.notes
+    websiteUrl: data.websiteUrl,
+    phone: data.phone,
+    hospitalName: data.hospitalName,
+    departmentName: data.departmentName,
+    signatureAddress: data.signatureAddress
   };
 }
 
-function toSafeScriptObject(value) {
-  // JSON.stringifyを使うことで、改行や引用符をApps Script内で安全に扱える文字列にします。
-  return JSON.stringify(value, null, 2);
-}
+function buildAutoReplyCode(data) {
+  const lectureJson = JSON.stringify(buildLectureObject(data), null, 2);
 
-function formatEventDate(data) {
-  if (!data.eventDate) return "";
-
-  const [year, month, day] = data.eventDate.split("-");
-  const dateText = `${Number(year)}年${Number(month)}月${Number(day)}日`;
-  return data.dayOfWeek ? `${dateText}（${data.dayOfWeek}）` : dateText;
-}
-
-function getSelectedTimeRange(data) {
-  if (data.timeRange === "その他") {
-    return data.customTimeRange || "";
-  }
-
-  return data.timeRange || "";
-}
-
-function joinWithSpace(...values) {
-  return values.filter(Boolean).join(" ");
-}
-
-function renderOutputs(outputs) {
-  const outputList = document.getElementById("outputList");
-  outputList.innerHTML = "";
-
-  OUTPUT_DEFINITIONS.forEach(([key, title]) => {
-    outputList.appendChild(createOutputBox(title, outputs[key]));
-  });
-}
-
-function renderEmptyMessage() {
-  document.getElementById("outputList").innerHTML = '<p class="empty-message">講座情報を入力し、「コードを生成」を押してください。</p>';
-}
-
-function createOutputBox(title, content) {
-  const box = document.createElement("article");
-  box.className = "output-box";
-
-  const header = document.createElement("div");
-  header.className = "output-header";
-
-  const heading = document.createElement("h3");
-  heading.textContent = title;
-
-  const copyArea = document.createElement("div");
-  copyArea.className = "copy-area";
-
-  const status = document.createElement("span");
-  status.className = "copy-status";
-  status.setAttribute("aria-live", "polite");
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "copy-button secondary-button";
-  button.textContent = "コピー";
-  button.addEventListener("click", () => copyText(content, status));
-
-  const pre = document.createElement("pre");
-  pre.textContent = content || "";
-
-  copyArea.append(status, button);
-  header.append(heading, copyArea);
-  box.append(header, pre);
-
-  return box;
-}
-
-async function copyText(text, statusElement) {
+  return `function autoReply(e) {
   try {
-    await navigator.clipboard.writeText(text);
-    showCopyStatus(statusElement, "コピーしました");
+    const sheet = e && e.range ? e.range.getSheet() : SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const row = e && e.range ? e.range.getRow() : sheet.getLastRow();
+
+    if (row < 2) {
+      return;
+    }
+
+    const values = sheet.getRange(row, 2, 1, 2).getValues()[0];
+    const email = values[0];
+    const name = values[1] || "参加者";
+
+    if (!email) {
+      console.error("メールアドレスが空のため、自動返信メールを送信できません。行: " + row);
+      return;
+    }
+
+    const lecture = ${lectureJson};
+    const subject = "【お申込み完了】明理会東京大和病院 無料公開講座";
+    const body = buildAutoReplyBody_(lecture, name);
+
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      body: body,
+      name: "明理会東京大和病院 広報企画担当"
+    });
   } catch (error) {
-    fallbackCopyText(text);
-    showCopyStatus(statusElement, "コピーしました");
+    console.error("autoReplyでエラーが発生しました: " + error);
   }
 }
 
-function fallbackCopyText(text) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
+function buildAutoReplyBody_(lecture, name) {
+  const lines = [
+    name + " 様",
+    "",
+    "この度は、明理会東京大和病院 無料公開講座へお申し込みいただき、誠にありがとうございます。",
+    "以下の内容でお申し込みを受け付けました。",
+    "",
+    "【講座情報】",
+    "講演名：" + lecture.title,
+    "講演内容：" + lecture.content,
+    "開催日：" + lecture.displayDate + (lecture.weekday ? "（" + lecture.weekday + "）" : ""),
+    "時間：" + lecture.timeText,
+    "開場：" + lecture.openNote,
+    "講師：" + lecture.speaker,
+    "診療科・職種：" + lecture.speakerRole,
+    "会場：" + lecture.venueName,
+    "会場補足：" + lecture.venueNote,
+    "住所：" + formatAddress_(lecture),
+    "アクセス：" + lecture.access,
+    "定員：" + lecture.capacity,
+    "詳細URL：" + lecture.websiteUrl,
+    "",
+    "当日はお気をつけてお越しください。",
+    "",
+    "【お問い合わせ】",
+    "電話：" + lecture.phone,
+    "",
+    lecture.hospitalName,
+    lecture.departmentName,
+    lecture.signatureAddress
+  ];
+
+  return lines.join("\\n");
 }
 
-function showCopyStatus(statusElement, message) {
-  statusElement.textContent = message;
-  window.setTimeout(() => {
-    statusElement.textContent = "";
-  }, 2200);
+function formatAddress_(lecture) {
+  if (!lecture.postalCode && !lecture.address) {
+    return "";
+  }
+
+  return ("〒" + lecture.postalCode + " " + lecture.address).trim();
+}`;
+}
+
+function buildReminderCode(data) {
+  const lectureJson = JSON.stringify(buildLectureObject(data), null, 2);
+
+  return `function sendReminder() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const lecture = ${lectureJson};
+    const eventDate = parseDate_(lecture.eventDate);
+
+    if (!eventDate) {
+      console.error("開催日が未設定または不正なため、リマインダーを送信できません。");
+      return;
+    }
+
+    const today = startOfDay_(new Date());
+    const daysLeft = Math.floor((startOfDay_(eventDate).getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+    if (daysLeft < 0 || daysLeft > 3) {
+      return;
+    }
+
+    const reminderHeader = "リマインド送信済み";
+    const lastColumn = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+    let reminderColumn = headers.indexOf(reminderHeader) + 1;
+
+    if (reminderColumn === 0) {
+      reminderColumn = lastColumn + 1;
+      sheet.getRange(1, reminderColumn).setValue(reminderHeader);
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return;
+    }
+
+    const values = sheet.getRange(2, 1, lastRow - 1, Math.max(reminderColumn, 3)).getValues();
+    const subject = "【確認】無料公開講座の開催が近づいてまいりました";
+
+    values.forEach(function(rowValues, index) {
+      const rowNumber = index + 2;
+      const email = rowValues[1];
+      const name = rowValues[2] || "参加者";
+      const reminderStatus = rowValues[reminderColumn - 1];
+
+      if (!email || reminderStatus === "送信済み") {
+        return;
+      }
+
+      const body = buildReminderBody_(lecture, name, daysLeft);
+
+      MailApp.sendEmail({
+        to: email,
+        subject: subject,
+        body: body,
+        name: "明理会東京大和病院 広報企画担当"
+      });
+
+      sheet.getRange(rowNumber, reminderColumn).setValue("送信済み");
+    });
+  } catch (error) {
+    console.error("sendReminderでエラーが発生しました: " + error);
+  }
+}
+
+function buildReminderBody_(lecture, name, daysLeft) {
+  const intro = daysLeft === 3
+    ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
+    : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
+
+  const lines = [
+    name + " 様",
+    "",
+    intro,
+    "当日のご案内をお送りいたします。",
+    "",
+    "【講座情報】",
+    "講演名：" + lecture.title,
+    "講演内容：" + lecture.content,
+    "開催日：" + lecture.displayDate + (lecture.weekday ? "（" + lecture.weekday + "）" : ""),
+    "時間：" + lecture.timeText,
+    "開場：" + lecture.openNote,
+    "講師：" + lecture.speaker,
+    "診療科・職種：" + lecture.speakerRole,
+    "会場：" + lecture.venueName,
+    "会場補足：" + lecture.venueNote,
+    "住所：" + formatAddress_(lecture),
+    "アクセス：" + lecture.access,
+    "詳細URL：" + lecture.websiteUrl,
+    "",
+    "ご来場を心よりお待ちしております。",
+    "",
+    "【お問い合わせ】",
+    "電話：" + lecture.phone,
+    "",
+    lecture.hospitalName,
+    lecture.departmentName,
+    lecture.signatureAddress
+  ];
+
+  return lines.join("\\n");
+}
+
+function parseDate_(dateText) {
+  if (!dateText) {
+    return null;
+  }
+
+  const parts = dateText.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+}
+
+function startOfDay_(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatAddress_(lecture) {
+  if (!lecture.postalCode && !lecture.address) {
+    return "";
+  }
+
+  return ("〒" + lecture.postalCode + " " + lecture.address).trim();
+}`;
+}
+
+function buildAutoReplyBody(data, name) {
+  const lines = [
+    `${name} 様`,
+    "",
+    "この度は、明理会東京大和病院 無料公開講座へお申し込みいただき、誠にありがとうございます。",
+    "以下の内容でお申し込みを受け付けました。",
+    "",
+    "【講座情報】",
+    `講演名：${data.lectureTitle}`,
+    `講演内容：${data.lectureContent}`,
+    `開催日：${formatDateWithWeekday(data)}`,
+    `時間：${data.displayTime}`,
+    `開場：${data.openNote}`,
+    `講師：${data.speaker}`,
+    `診療科・職種：${data.speakerRole}`,
+    `会場：${data.venueName}`,
+    `会場補足：${data.venueNote}`,
+    `住所：${formatAddress(data)}`,
+    `アクセス：${data.access}`,
+    `定員：${data.capacity}`,
+    `詳細URL：${data.websiteUrl}`,
+    "",
+    "当日はお気をつけてお越しください。",
+    "",
+    "【お問い合わせ】",
+    `電話：${data.phone}`,
+    "",
+    data.hospitalName,
+    data.departmentName,
+    data.signatureAddress
+  ];
+
+  return lines.join("\n");
+}
+
+function buildReminderBody(data, name, daysLeft) {
+  const intro = daysLeft === 3
+    ? "お申し込みいただいた公開講座の開催まで、あと3日となりました。"
+    : "お申し込みいただいた公開講座の開催が近づいてまいりました。";
+
+  const lines = [
+    `${name} 様`,
+    "",
+    intro,
+    "当日のご案内をお送りいたします。",
+    "",
+    "【講座情報】",
+    `講演名：${data.lectureTitle}`,
+    `講演内容：${data.lectureContent}`,
+    `開催日：${formatDateWithWeekday(data)}`,
+    `時間：${data.displayTime}`,
+    `開場：${data.openNote}`,
+    `講師：${data.speaker}`,
+    `診療科・職種：${data.speakerRole}`,
+    `会場：${data.venueName}`,
+    `会場補足：${data.venueNote}`,
+    `住所：${formatAddress(data)}`,
+    `アクセス：${data.access}`,
+    `詳細URL：${data.websiteUrl}`,
+    "",
+    "ご来場を心よりお待ちしております。",
+    "",
+    "【お問い合わせ】",
+    `電話：${data.phone}`,
+    "",
+    data.hospitalName,
+    data.departmentName,
+    data.signatureAddress
+  ];
+
+  return lines.join("\n");
+}
+
+function buildFormMessage(data) {
+  const lines = [
+    "お申し込みありがとうございます。",
+    "以下の公開講座について、お申し込みを受け付けました。",
+    "",
+    `講演名：${data.lectureTitle}`,
+    `開催日：${formatDateWithWeekday(data)}`,
+    `時間：${data.displayTime}`,
+    `会場：${data.venueName}`,
+    "",
+    "ご入力いただいたメールアドレス宛に自動返信メールをお送りします。",
+    "当日はお気をつけてお越しください。"
+  ];
+
+  return lines.join("\n");
+}
+
+function formatDateWithWeekday(data) {
+  if (!data.displayDate) {
+    return "";
+  }
+
+  return `${data.displayDate}${data.weekday ? `（${data.weekday}）` : ""}`;
+}
+
+function formatDateText(dateText, format) {
+  const date = parseDate(dateText);
+  if (!date) {
+    return "";
+  }
+
+  if (format === "japanese") {
+    const era = getJapaneseEra(date);
+    return `${era.name}${era.year}年${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function getJapaneseEra(date) {
+  const year = date.getFullYear();
+  const reiwaStart = new Date(2019, 4, 1);
+  const heiseiStart = new Date(1989, 0, 8);
+
+  if (date >= reiwaStart) {
+    return { name: "令和", year: year - 2018 };
+  }
+  if (date >= heiseiStart) {
+    return { name: "平成", year: year - 1988 };
+  }
+
+  return { name: "西暦", year };
+}
+
+function formatTimeRange(data) {
+  if (data.timePreset === "morning") {
+    return "午前の部 10:00〜11:30";
+  }
+  if (data.timePreset === "afternoon") {
+    return "午後の部 14:00〜15:30";
+  }
+  if (data.timePreset === "other") {
+    return data.customTimeText;
+  }
+  if (data.startTime && data.endTime) {
+    return `${data.startTime}〜${data.endTime}`;
+  }
+
+  return data.startTime || data.endTime || "";
+}
+
+function formatAddress(data) {
+  if (!data.postalCode && !data.address) {
+    return "";
+  }
+
+  return `〒${data.postalCode} ${data.address}`.trim();
+}
+
+function parseDate(dateText) {
+  if (!dateText) {
+    return null;
+  }
+
+  const parts = dateText.split("-");
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
