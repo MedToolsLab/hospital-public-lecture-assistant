@@ -2,8 +2,8 @@ const STORAGE_KEY = "publicLectureAssistantState";
 const ACCORDION_KEY = "publicLectureAssistantAccordionState";
 
 const defaultSettings = {
-  hospitalName: "明理会東京大和病院",
-  departmentName: "広報企画担当",
+  hospitalName: "",
+  departmentName: "",
   phone: "",
   websiteUrl: "",
   signatureAddress: ""
@@ -843,14 +843,14 @@ function buildAutoReplyCode(data) {
     }
 
     const lecture = ${lectureJson};
-    const subject = "【お申込み完了】明理会東京大和病院 無料公開講座";
+    const subject = "【お申込み完了】" + (lecture.hospitalName ? lecture.hospitalName + " " : "") + "無料公開講座";
     const body = buildAutoReplyBody_(lecture, name);
 
     MailApp.sendEmail({
       to: email,
       subject: subject,
       body: body,
-      name: "明理会東京大和病院 広報企画担当"
+      name: formatSenderName_(lecture)
     });
   } catch (error) {
     console.error("autoReplyでエラーが発生しました: " + error);
@@ -861,7 +861,7 @@ function buildAutoReplyBody_(lecture, name) {
   const lines = [
     name + " 様",
     "",
-    "この度は、明理会東京大和病院 無料公開講座へお申し込みいただき、誠にありがとうございます。",
+    "この度は、" + (lecture.hospitalName || "当院") + " 無料公開講座へお申し込みいただき、誠にありがとうございます。",
     "以下の内容でお申し込みを受け付けました。",
     "",
     "【講座情報】",
@@ -898,6 +898,10 @@ function formatAddress_(lecture) {
   }
 
   return ("〒" + lecture.postalCode + " " + lecture.address).trim();
+}
+
+function formatSenderName_(lecture) {
+  return [lecture.hospitalName, lecture.departmentName].filter(Boolean).join(" ") || "公開講座担当";
 }`;
 }
 
@@ -956,7 +960,7 @@ function buildReminderCode(data) {
         to: email,
         subject: subject,
         body: body,
-        name: "明理会東京大和病院 広報企画担当"
+        name: formatSenderName_(lecture)
       });
 
       sheet.getRange(rowNumber, reminderColumn).setValue("送信済み");
@@ -1027,6 +1031,10 @@ function formatAddress_(lecture) {
   }
 
   return ("〒" + lecture.postalCode + " " + lecture.address).trim();
+}
+
+function formatSenderName_(lecture) {
+  return [lecture.hospitalName, lecture.departmentName].filter(Boolean).join(" ") || "公開講座担当";
 }`;
 }
 
@@ -1034,7 +1042,7 @@ function buildAutoReplyBody(data, name) {
   const lines = [
     `${name} 様`,
     "",
-    "この度は、明理会東京大和病院 無料公開講座へお申し込みいただき、誠にありがとうございます。",
+    `この度は、${data.hospitalName || "当院"} 無料公開講座へお申し込みいただき、誠にありがとうございます。`,
     "以下の内容でお申し込みを受け付けました。",
     "",
     "【講座情報】",
