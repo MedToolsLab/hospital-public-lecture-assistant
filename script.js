@@ -55,6 +55,9 @@ const outputIds = [
 let speakerMaster = [];
 let venueTemplates = [];
 let toastTimer = null;
+let activeVenueTemplate = null;
+
+const venueFieldIds = ["venueName", "venueNote", "postalCode", "address", "access"];
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
@@ -90,10 +93,12 @@ function setupEvents() {
 
     element.addEventListener("input", () => {
       clearFieldError(id);
+      updateTemplateOverrideState(id);
       saveState();
     });
     element.addEventListener("change", () => {
       clearFieldError(id);
+      updateTemplateOverrideState(id);
       saveState();
     });
   });
@@ -237,8 +242,8 @@ function validateForm() {
     }
   });
 
-  if (data.postalCode && !/^[0-9]{7}$/.test(data.postalCode)) {
-    setFieldError("postalCode", "郵便番号はハイフンなしの7桁数字で入力してください。");
+  if (data.postalCode && !isPostalCode(data.postalCode)) {
+    setFieldError("postalCode", "郵便番号は7桁数字、または123-4567の形式で入力してください。");
     firstInvalid = firstInvalid || document.getElementById("postalCode");
   }
 
@@ -314,6 +319,10 @@ function clearForm() {
   });
   updateWeekday();
   updateTimeControls();
+  activeVenueTemplate = null;
+  venueFieldIds.forEach((id) => {
+    document.getElementById(id).closest(".field").classList.remove("is-template-overridden", "is-autofilled");
+  });
   clearAllErrors();
   outputIds.forEach((id) => setOutput(id, ""));
   clearStatuses();
@@ -400,10 +409,14 @@ function showToast(message) {
 }
 
 function normalizePostalCode(event) {
-  event.target.value = event.target.value.replace(/\D/g, "").slice(0, 7);
+  event.target.value = event.target.value.replace(/[^\d-]/g, "").slice(0, 8);
   if (event.target.id === "postalCode") {
     clearFieldError("postalCode");
   }
+}
+
+function isPostalCode(value) {
+  return /^[0-9]{3}-?[0-9]{4}$/.test(value);
 }
 
 function updateWeekday() {
@@ -445,7 +458,7 @@ function addSpeaker() {
 
   nameInput.value = "";
   roleInput.value = "";
-  renderMasters();
+  renderSpeakerList(speakerMaster.length - 1);
   saveState();
   flashButton(document.getElementById("addSpeakerButton"), "追加しました");
   showToast("講師を追加しました。");
@@ -471,7 +484,8 @@ function addVenue() {
   ["masterVenueName", "masterVenueNote", "masterPostalCode", "masterAddress", "masterAccess"].forEach((id) => {
     document.getElementById(id).value = "";
   });
-  renderMasters();
+  renderVenueList(venueTemplates.length - 1);
+  renderQuickVenueList();
   saveState();
   flashButton(document.getElementById("addVenueButton"), "追加しました");
   showToast("会場を追加しました。");
@@ -480,9 +494,10 @@ function addVenue() {
 function renderMasters() {
   renderSpeakerList();
   renderVenueList();
+  renderQuickVenueList();
 }
 
-function renderSpeakerList() {
+function renderSpeakerList(highlightIndex) {
   const list = document.getElementById("speakerList");
   list.innerHTML = "";
 
@@ -503,6 +518,10 @@ function renderSpeakerList() {
       <button type="button" class="small-button" data-action="delete-speaker" data-index="${index}">削除</button>
     `;
     list.appendChild(item);
+
+    if (index === highlightIndex) {
+      flashRow(item);
+    }
   });
 
   list.querySelectorAll("button").forEach((button) => {
@@ -510,7 +529,7 @@ function renderSpeakerList() {
   });
 }
 
-function renderVenueList() {
+function renderVenueList(highlightIndex) {
   const list = document.getElementById("venueList");
   list.innerHTML = "";
 
@@ -531,10 +550,44 @@ function renderVenueList() {
       <button type="button" class="small-button" data-action="delete-venue" data-index="${index}">削除</button>
     `;
     list.appendChild(item);
+
+    if (index === highlightIndex) {
+      flashRow(item);
+    }
   });
 
   list.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => handleVenueAction(button));
+  });
+}
+
+function renderQuickVenueList() {
+  const list = document.getElementById("quickVenueList");
+  list.innerHTML = "";
+
+  if (venueTemplates.length === 0) {
+    list.innerHTML = '<p class="empty-state">まだ会場が登録されていません。会場テンプレート管理から追加してください。</p>';
+    return;
+  }
+
+  venueTemplates.forEach((venueItem, index) => {
+    const item = document.createElement("div");
+    item.className = "quick-item";
+    item.innerHTML = `
+      <div>
+        <strong>${escapeHtml(venueItem.name)}</strong>
+        <span>${escapeHtml([venueItem.note, venueItem.address].filter(Boolean).join(" / ") || "詳細未設定")}</span>
+      </div>
+      <button type="button" class="small-button" data-index="${index}">この会場を使う</button>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyVenueTemplate(venueTemplates[Number(button.dataset.index)]);
+      flashButton(button, "入力しました");
+    });
   });
 }
 
@@ -551,32 +604,101 @@ function handleSpeakerAction(button) {
     return;
   }
 
-  speakerMaster.splice(index, 1);
-  renderSpeakerList();
-  saveState();
-  showToast("講師を削除しました。");
+  removeMasterRow(button, () => {
+    speakerMaster.splice(index, 1);
+    renderSpeakerList();
+    saveState();
+    showToast("講師を削除しました。");
+  });
 }
 
 function handleVenueAction(button) {
   const index = Number(button.dataset.index);
 
   if (button.dataset.action === "use-venue") {
-    const venueItem = venueTemplates[index];
-    document.getElementById("venueName").value = venueItem.name;
-    document.getElementById("venueNote").value = venueItem.note;
-    document.getElementById("postalCode").value = venueItem.postalCode;
-    document.getElementById("address").value = venueItem.address;
-    document.getElementById("access").value = venueItem.access;
-    saveState();
+    applyVenueTemplate(venueTemplates[index]);
     flashButton(button, "反映しました");
-    showToast("会場情報を反映しました。");
     return;
   }
 
-  venueTemplates.splice(index, 1);
-  renderVenueList();
+  removeMasterRow(button, () => {
+    venueTemplates.splice(index, 1);
+    renderVenueList();
+    renderQuickVenueList();
+    saveState();
+    showToast("会場を削除しました。");
+  });
+}
+
+function applyVenueTemplate(venueItem) {
+  if (!venueItem) {
+    return;
+  }
+
+  const values = {
+    venueName: venueItem.name || "",
+    venueNote: venueItem.note || "",
+    postalCode: venueItem.postalCode || "",
+    address: venueItem.address || "",
+    access: venueItem.access || ""
+  };
+
+  activeVenueTemplate = { ...values };
+
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    element.value = value;
+    element.closest(".field").classList.remove("is-template-overridden");
+    flashField(element);
+  });
+
+  expandAccordionByPanelId("course-panel");
   saveState();
-  showToast("会場を削除しました。");
+  showToast("会場情報を講座情報へ入力しました。");
+}
+
+function updateTemplateOverrideState(id) {
+  if (!activeVenueTemplate || !venueFieldIds.includes(id)) {
+    return;
+  }
+
+  const element = document.getElementById(id);
+  const baseValue = activeVenueTemplate[id] || "";
+  element.closest(".field").classList.toggle("is-template-overridden", element.value.trim() !== baseValue);
+}
+
+function flashField(element) {
+  const field = element.closest(".field");
+  field.classList.remove("is-autofilled");
+  window.requestAnimationFrame(() => {
+    field.classList.add("is-autofilled");
+    window.setTimeout(() => field.classList.remove("is-autofilled"), 1600);
+  });
+}
+
+function flashRow(element) {
+  element.classList.add("is-row-highlighted");
+  window.setTimeout(() => element.classList.remove("is-row-highlighted"), 1600);
+}
+
+function removeMasterRow(button, afterRemove) {
+  const row = button.closest(".master-item");
+  if (!row) {
+    afterRemove();
+    return;
+  }
+
+  row.classList.add("is-row-removing");
+  window.setTimeout(afterRemove, 280);
+}
+
+function expandAccordionByPanelId(panelId) {
+  const panel = document.getElementById(panelId);
+  const button = document.querySelector(`[aria-controls="${panelId}"]`);
+
+  if (panel && button) {
+    setAccordionState(button, panel, true);
+  }
 }
 
 function resetSettings() {
@@ -608,7 +730,9 @@ function resetVenues() {
   }
 
   venueTemplates = [];
+  activeVenueTemplate = null;
   renderVenueList();
+  renderQuickVenueList();
   saveState();
   showToast("会場テンプレートを初期化しました。");
 }
@@ -632,7 +756,7 @@ function exportBackup() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  showToast("JSONをエクスポートしました。");
+  showToast("設定のバックアップを保存しました。");
 }
 
 function importBackup(event) {
@@ -645,7 +769,7 @@ function importBackup(event) {
   reader.onload = () => {
     try {
       const backup = JSON.parse(reader.result);
-      if (!confirm("JSONバックアップを読み込み、基本設定・講師マスター・会場テンプレートを上書きします。よろしいですか？")) {
+      if (!confirm("バックアップを読み込み、基本設定・講師マスター・会場テンプレートを上書きします。よろしいですか？")) {
         event.target.value = "";
         return;
       }
@@ -657,12 +781,13 @@ function importBackup(event) {
       });
       speakerMaster = Array.isArray(backup.speakerMaster) ? backup.speakerMaster : [];
       venueTemplates = Array.isArray(backup.venueTemplates) ? backup.venueTemplates : [];
+      activeVenueTemplate = null;
       renderMasters();
       saveState();
-      showToast("JSONをインポートしました。");
+      showToast("バックアップを読み込みました。");
     } catch (error) {
-      console.error("JSONインポートに失敗しました", error);
-      showToast("JSONの読み込みに失敗しました。");
+      console.error("バックアップの読み込みに失敗しました", error);
+      showToast("バックアップの読み込みに失敗しました。");
     } finally {
       event.target.value = "";
     }

@@ -16,7 +16,17 @@
   </header>
 
   <main class="container layout">
-    <section class="tool-card">
+    <nav class="page-nav" aria-label="ページ内目次">
+      <a href="#settings-panel">基本設定</a>
+      <a href="#speaker-master-panel">講師マスター管理</a>
+      <a href="#venue-master-panel">会場テンプレート管理</a>
+      <a href="#quick-venue-panel">よく使う会場</a>
+      <a href="#course-panel">講座情報</a>
+      <a href="#message-panel">送信完了メッセージ</a>
+      <a href="#output-panel">生成結果</a>
+    </nav>
+
+    <section class="tool-card" id="settings-section">
       <button class="accordion-trigger" type="button" id="settings-trigger" aria-expanded="true" aria-controls="settings-panel" data-accordion="settings">
         <span>
           <span class="accordion-title">基本設定</span>
@@ -25,11 +35,21 @@
         <span class="accordion-icon" aria-hidden="true">⌄</span>
       </button>
       <div class="accordion-panel" id="settings-panel" role="region" aria-labelledby="settings-trigger">
-        <div class="toolbar">
-          <button type="button" id="exportButton" class="secondary-button">JSONエクスポート</button>
-          <button type="button" id="importButton" class="secondary-button">JSONインポート</button>
-          <button type="button" id="resetSettingsButton" class="danger-button">基本設定を初期値に戻す</button>
+        <div class="backup-box" aria-labelledby="backup-title">
+          <div>
+            <h2 id="backup-title">設定の引き継ぎ・バックアップ</h2>
+            <p>PC変更やブラウザのデータ削除に備えて、基本設定・講師・会場の登録内容を保存できます。</p>
+          </div>
+          <div class="toolbar">
+            <button type="button" id="exportButton" class="secondary-button">設定をバックアップ</button>
+            <button type="button" id="importButton" class="secondary-button">バックアップを読み込む</button>
+          </div>
+          <label class="sr-only" for="importFile">バックアップファイルを選択</label>
           <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+
+        <div class="toolbar">
+          <button type="button" id="resetSettingsButton" class="danger-button">基本設定を初期値に戻す</button>
         </div>
 
         <div class="form-grid">
@@ -66,10 +86,10 @@
       </div>
     </section>
 
-    <section class="tool-card">
+    <section class="tool-card" id="speaker-master-section">
       <button class="accordion-trigger" type="button" id="speaker-master-trigger" aria-expanded="true" aria-controls="speaker-master-panel" data-accordion="speakerMaster">
         <span>
-          <span class="accordion-title">講師マスター</span>
+          <span class="accordion-title">講師マスター管理</span>
           <span class="accordion-help">よく使う講師情報を保存し、講座情報へ反映できます。</span>
         </span>
         <span class="accordion-icon" aria-hidden="true">⌄</span>
@@ -93,10 +113,10 @@
       </div>
     </section>
 
-    <section class="tool-card">
+    <section class="tool-card" id="venue-master-section">
       <button class="accordion-trigger" type="button" id="venue-master-trigger" aria-expanded="true" aria-controls="venue-master-panel" data-accordion="venueTemplates">
         <span>
-          <span class="accordion-title">会場テンプレート</span>
+          <span class="accordion-title">会場テンプレート管理</span>
           <span class="accordion-help">会場名、住所、アクセスをテンプレート化します。</span>
         </span>
         <span class="accordion-icon" aria-hidden="true">⌄</span>
@@ -113,7 +133,7 @@
           </div>
           <div class="field">
             <label for="masterPostalCode">郵便番号</label>
-            <input type="text" id="masterPostalCode" inputmode="numeric" maxlength="7" pattern="[0-9]{7}" placeholder="例：1730001">
+            <input type="text" id="masterPostalCode" inputmode="numeric" maxlength="8" pattern="[0-9]{3}-?[0-9]{4}" placeholder="例：173-0001">
           </div>
           <div class="field">
             <label for="masterAddress">住所</label>
@@ -132,7 +152,20 @@
       </div>
     </section>
 
-    <section class="tool-card">
+    <section class="tool-card" id="quick-venue-section">
+      <button class="accordion-trigger" type="button" id="quick-venue-trigger" aria-expanded="true" aria-controls="quick-venue-panel" data-accordion="quickVenue">
+        <span>
+          <span class="accordion-title">よく使う会場テンプレート</span>
+          <span class="accordion-help">登録済みの会場を選ぶと、講座情報の会場欄へ自動入力されます。</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">⌄</span>
+      </button>
+      <div class="accordion-panel" id="quick-venue-panel" role="region" aria-labelledby="quick-venue-trigger">
+        <div id="quickVenueList" class="quick-list" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="tool-card" id="course-section">
       <button class="accordion-trigger" type="button" id="course-trigger" aria-expanded="true" aria-controls="course-panel" data-accordion="course">
         <span>
           <span class="accordion-title">講座情報</span>
@@ -197,7 +230,7 @@
 
             <div class="field wide hidden" id="customTimeField">
               <label for="customTimeText">その他の開催時間</label>
-              <input type="text" id="customTimeText" placeholder="例：13:30〜15:00、受付開始13:00">
+              <input type="text" id="customTimeText" placeholder="例：16:30〜17:30、受付開始16:00">
             </div>
 
             <div class="field">
@@ -229,8 +262,8 @@
 
             <div class="field">
               <label for="postalCode">郵便番号</label>
-              <input type="text" id="postalCode" inputmode="numeric" maxlength="7" pattern="[0-9]{7}" placeholder="例：1730001" aria-describedby="postalCodeHelp postalCodeError">
-              <p class="field-help" id="postalCodeHelp">住所自動補完は外部API送信を避けるため未使用です。7桁数字で入力してください。</p>
+              <input type="text" id="postalCode" inputmode="numeric" maxlength="8" pattern="[0-9]{3}-?[0-9]{4}" placeholder="例：173-0001" aria-describedby="postalCodeHelp postalCodeError">
+              <p class="field-help" id="postalCodeHelp">住所は郵便番号入力後に手動で確認してください。ハイフンあり・なしのどちらでも入力できます。</p>
               <p class="field-error" id="postalCodeError"></p>
             </div>
 
@@ -258,10 +291,10 @@
       </div>
     </section>
 
-    <section class="tool-card">
+    <section class="tool-card" id="message-section">
       <button class="accordion-trigger" type="button" id="message-trigger" aria-expanded="true" aria-controls="message-panel" data-accordion="message">
         <span>
-          <span class="accordion-title">フォーム完了メッセージ</span>
+          <span class="accordion-title">Googleフォーム送信完了メッセージ</span>
           <span class="accordion-help">Googleフォームの説明や完了画面に使える案内文です。</span>
         </span>
         <span class="accordion-icon" aria-hidden="true">⌄</span>
@@ -278,7 +311,7 @@
       </div>
     </section>
 
-    <section class="tool-card">
+    <section class="tool-card" id="output-section">
       <button class="accordion-trigger" type="button" id="output-trigger" aria-expanded="true" aria-controls="output-panel" data-accordion="output">
         <span>
           <span class="accordion-title">生成結果</span>
