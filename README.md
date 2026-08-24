@@ -13,6 +13,8 @@
 
 HTML / CSS / JavaScriptのみで作成しているため、GitHub Pagesで公開できます。
 
+制作背景や改善の流れは [PORTFOLIO.md](PORTFOLIO.md) にまとめています。
+
 ## 使い方
 
 1. `index.html` をブラウザで開きます。
