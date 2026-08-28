@@ -833,12 +833,21 @@ function buildAutoReplyCode(data) {
       return;
     }
 
+    const replyStatusColumn = getOrCreateColumn_(sheet, "申込返信済み");
+    const replyDateColumn = getOrCreateColumn_(sheet, "返信日時");
+    const currentStatus = sheet.getRange(row, replyStatusColumn).getValue();
+
+    if (currentStatus === "送信済み") {
+      return;
+    }
+
     const values = sheet.getRange(row, 2, 1, 2).getValues()[0];
-    const email = values[0];
+    const email = String(values[0] || "").trim();
     const name = values[1] || "参加者";
 
-    if (!email) {
-      console.error("メールアドレスが空のため、自動返信メールを送信できません。行: " + row);
+    if (!email || !email.includes("@")) {
+      sheet.getRange(row, replyStatusColumn).setValue("メール取得不可");
+      console.error("メールアドレスを取得できないため、自動返信メールを送信できません。行: " + row);
       return;
     }
 
@@ -846,15 +855,38 @@ function buildAutoReplyCode(data) {
     const subject = "【お申込み完了】" + (lecture.hospitalName ? lecture.hospitalName + " " : "") + "無料公開講座";
     const body = buildAutoReplyBody_(lecture, name);
 
-    MailApp.sendEmail({
-      to: email,
-      subject: subject,
-      body: body,
-      name: formatSenderName_(lecture)
-    });
+    try {
+      MailApp.sendEmail({
+        to: email,
+        subject: subject,
+        body: body,
+        name: formatSenderName_(lecture)
+      });
+    } catch (sendError) {
+      sheet.getRange(row, replyStatusColumn).setValue("送信エラー");
+      console.error("自動返信メールの送信に失敗しました。行: " + row + " / " + sendError);
+      return;
+    }
+
+    sheet.getRange(row, replyStatusColumn).setValue("送信済み");
+    sheet.getRange(row, replyDateColumn).setValue(new Date());
   } catch (error) {
     console.error("autoReplyでエラーが発生しました: " + error);
   }
+}
+
+function getOrCreateColumn_(sheet, headerName) {
+  const lastColumn = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const index = headers.indexOf(headerName);
+
+  if (index >= 0) {
+    return index + 1;
+  }
+
+  const newColumn = lastColumn + 1;
+  sheet.getRange(1, newColumn).setValue(headerName);
+  return newColumn;
 }
 
 function buildAutoReplyBody_(lecture, name) {
@@ -1112,20 +1144,22 @@ function buildReminderBody(data, name, daysLeft) {
 }
 
 function buildFormMessage(data) {
-  const lines = [
-    "お申し込みありがとうございます。",
-    "以下の公開講座について、お申し込みを受け付けました。",
-    "",
-    `講演名：${data.lectureTitle}`,
-    `開催日：${formatDateWithWeekday(data)}`,
-    `時間：${data.displayTime}`,
-    `会場：${data.venueName}`,
-    "",
-    "ご入力いただいたメールアドレス宛に自動返信メールをお送りします。",
-    "当日はお気をつけてお越しください。"
-  ];
+  const hospitalName = data.hospitalName || "病院名未設定";
+  const phone = data.phone || "電話番号未設定";
 
-  return lines.join("\n");
+  return [
+    "お申し込みありがとうございました。",
+    "",
+    "受付完了メール（自動返信）を数分以内にお送りしております。",
+    "",
+    "メールが届かない場合は、迷惑メールフォルダをご確認いただくとともに、入力したメールアドレスに間違いがないかご確認ください。",
+    "",
+    "携帯電話会社（docomo・au・SoftBank等）のメールアドレスをご利用の場合は、受信設定により届かないことがあります。",
+    "",
+    `30分以上経過してもメールが届かない場合は、お手数ですが${hospitalName}（TEL：${phone}）までお問い合わせください。`,
+    "",
+    "当日、皆さまのご参加を心よりお待ちしております。"
+  ].join("\n");
 }
 
 function formatDateWithWeekday(data) {
