@@ -978,24 +978,28 @@ function buildReminderCode(data) {
 
     values.forEach(function(rowValues, index) {
       const rowNumber = index + 2;
-      const email = rowValues[1];
+      const email = String(rowValues[1] || "").trim();
       const name = rowValues[2] || "参加者";
       const reminderStatus = rowValues[reminderColumn - 1];
 
-      if (!email || reminderStatus === "送信済み") {
+      if (!email || !email.includes("@") || reminderStatus === "送信済み") {
         return;
       }
 
-      const body = buildReminderBody_(lecture, name, daysLeft);
+      try {
+        const body = buildReminderBody_(lecture, name, daysLeft);
 
-      MailApp.sendEmail({
-        to: email,
-        subject: subject,
-        body: body,
-        name: formatSenderName_(lecture)
-      });
+        MailApp.sendEmail({
+          to: email,
+          subject: subject,
+          body: body,
+          name: formatSenderName_(lecture)
+        });
 
-      sheet.getRange(rowNumber, reminderColumn).setValue("送信済み");
+        sheet.getRange(rowNumber, reminderColumn).setValue("送信済み");
+      } catch (sendError) {
+        console.error("リマインダーメールの送信に失敗しました。行: " + rowNumber + " / " + sendError);
+      }
     });
   } catch (error) {
     console.error("sendReminderでエラーが発生しました: " + error);
@@ -1057,17 +1061,9 @@ function startOfDay_(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function formatAddress_(lecture) {
-  if (!lecture.postalCode && !lecture.address) {
-    return "";
-  }
-
-  return ("〒" + lecture.postalCode + " " + lecture.address).trim();
-}
-
-function formatSenderName_(lecture) {
-  return [lecture.hospitalName, lecture.departmentName].filter(Boolean).join(" ") || "公開講座担当";
-}`;
+// formatAddress_ / formatSenderName_ は autoReply 側のコードで定義済みのため、
+// ここでは重複定義しません。sendReminder は同じApps Scriptプロジェクトに
+// autoReply と一緒に貼り付けてご利用ください（READMEの貼り付け手順を参照）。`;
 }
 
 function buildAutoReplyBody(data, name) {
